@@ -1,0 +1,361 @@
+// ============================================================================
+// SCHEMA MULTITENANT - GESTIÓN DE AGENCIAS DE MARKETING DIGITAL
+// ----------------------------------------------------------------------------
+// Estrategia de aislamiento: "Shared Database, Shared Schema" con columna
+// discriminante `agencyId` en TODA tabla dependiente de un tenant.
+// La integridad se refuerza en 3 capas:
+//   1) FK + índice compuesto en cada tabla (rendimiento de queries por tenant).
+//   2) Prisma Client Extension (ver lib/prisma.ts) que inyecta/valida agencyId
+//      automáticamente en cada operación, evitando fugas por olvido humano.
+//   3) (Opcional, recomendado en prod) Postgres Row Level Security como
+//      última barrera si algún día se expone acceso directo a la DB.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------------------------------
+// TENANT
+// ----------------------------------------------------------------------------
+
+model Agency {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique // usado en /app/(dashboard)/[agencySlug]/...
+  logoUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users          User[]
+  clients        Client[]
+  categories     Category[]
+  deliverables   Deliverable[]
+  events         Event[]
+  bankAccounts   BankAccount[]
+  transactions   Transaction[]
+  clientBillings ClientBilling[]
+
+  @@map("agencies")
+}
+
+// ----------------------------------------------------------------------------
+// AUTH
+// ----------------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  password  String // hash (bcrypt/argon2), nunca texto plano
+  role      Role     @default(MEMBER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  agencyId String
+  agency   Agency @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  // El email es único DENTRO de la agencia, no globalmente: dos agencias
+  // distintas pueden tener un usuario con el mismo correo.
+  @@unique([agencyId, email])
+  @@index([agencyId])
+  @@map("users")
+}
+
+// ----------------------------------------------------------------------------
+// CLIENTES
+// ----------------------------------------------------------------------------
+
+model Category {
+  id        String   @id @default(cuid())
+  name      String // ej. "Cafetería", "Bar", "Agencia de viajes"
+  createdAt DateTime @default(now())
+
+  agencyId String
+  agency   Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  clients  Client[]
+
+  @@unique([agencyId, name])
+  @@index([agencyId])
+  @@map("categories")
+}
+
+enum PaymentStatus {
+  AL_DIA
+  PENDIENTE
+  VENCIDO
+}
+
+enum DeliverableType {
+  VIDEO
+  DISENO
+}
+
+model Client {
+  id               String        @id @default(cuid())
+  nombreNegocio    String
+  contacto         String?
+  telefono         String?
+  email            String?
+  totalMensualidad Decimal       @db.Decimal(10, 2)
+  diaCobro         Int? // día del mes en que se espera el cobro (1-31)
+  // Desde qué mes se le empieza a cobrar la mensualidad (ej. contratado en
+  // junio → debe junio y julio, nunca meses anteriores). `ensureClientBillings`
+  // solo genera cargos (ClientBilling) para meses >= esta fecha.
+  fechaContratacion DateTime      @default(now())
+  estatusPago      PaymentStatus @default(PENDIENTE)
+  activo           Boolean       @default(true)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  agencyId   String
+  agency     Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  // Tabla relacional en lugar de JSON: permite validar/consultar cuántos
+  // entregables mensuales incluye el contrato de cada cliente por tipo,
+  // y comparar fácilmente contra los Deliverable ya creados en el mes.
+  deliverableConfig ClientDeliverableConfig[]
+  deliverables      Deliverable[]
+  events            Event[]
+  transactions      Transaction[]
+  billings          ClientBilling[]
+
+  @@index([agencyId])
+  @@index([agencyId, estatusPago])
+  @@map("clients")
+}
+
+// Un "cargo" de mensualidad por cliente/mes/año, con el monto congelado al
+// momento de generarse (si más adelante cambias la mensualidad del cliente,
+// los cargos ya generados no se alteran retroactivamente). Lo "pagado" se
+// deriva sumando los Transaction (abonos) ligados a este cargo; lo que
+// "resta" es simplemente montoEsperado menos esa suma.
+model ClientBilling {
+  id            String   @id @default(cuid())
+  anio          Int
+  mes           Int // 1-12
+  montoEsperado Decimal  @db.Decimal(10, 2)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  agencyId String
+  agency   Agency @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  transactions Transaction[]
+
+  @@unique([clientId, anio, mes])
+  @@index([agencyId, anio, mes])
+  @@map("client_billings")
+}
+
+model ClientDeliverableConfig {
+  id              String          @id @default(cuid())
+  tipo            DeliverableType
+  cantidadMensual Int // ej. 4 videos / 4 diseños al mes
+
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  // agencyId denormalizado a propósito: permite filtrar por tenant sin
+  // necesidad de un join hacia Client en queries de aislamiento estricto.
+  agencyId String
+
+  @@unique([clientId, tipo])
+  @@index([agencyId])
+  @@map("client_deliverable_configs")
+}
+
+// ----------------------------------------------------------------------------
+// ENTREGABLES (KANBAN)
+// ----------------------------------------------------------------------------
+
+enum DeliverableStatus {
+  EN_PROCESO
+  REVISION_CLIENTE
+  APROBADO
+  PUBLICADO
+}
+
+enum ExtraPaymentStatus {
+  PENDIENTE
+  PAGADO
+}
+
+model Deliverable {
+  id           String            @id @default(cuid())
+  tipo         DeliverableType
+  titulo       String
+  descripcion  String?
+  estado       DeliverableStatus @default(EN_PROCESO)
+  fechaEntrega DateTime?
+  // URL pública (r2.dev) de la miniatura subida a Cloudflare R2, para
+  // mostrarla en el Kanban/Parrilla y embeberla en el PDF de resumen
+  // mensual. `archivoKey` es el object key en el bucket — se necesita
+  // aparte para poder borrar/reemplazar el archivo en R2 (no se puede
+  // reconstruir de forma confiable solo a partir de la URL pública).
+  archivoUrl   String?
+  archivoKey   String?
+  // Link de referencia (ej. video/diseño de ejemplo en Drive, Canva, etc.)
+  // que se muestra en la parrilla y en el resumen descargable.
+  linkEjemplo  String?
+  // Texto de copy para la publicación (redes sociales). A propósito NUNCA
+  // se incluye en los PDF descargables (ni la parrilla de planeación ni el
+  // resumen mensual) — es solo para uso interno del equipo, no para el cliente.
+  copy         String?
+  orden        Int // posición dentro de su columna (estado), para el drag-and-drop
+
+  // A qué mes de la "parrilla de contenido" pertenece. Independiente de
+  // `fechaEntrega` (que puede no estar definida aún) y de `createdAt`
+  // (inmutable): esto es lo que permite cambiar de mes en la vista de
+  // Entregables y ver el tablero/parrilla de ese mes específico.
+  // Los `dbgenerated` solo sirven de red de seguridad para backfillear filas
+  // existentes al migrar; el código siempre los asigna explícitamente al crear.
+  anio Int @default(dbgenerated("EXTRACT(YEAR FROM CURRENT_DATE)::int"))
+  mes  Int @default(dbgenerated("EXTRACT(MONTH FROM CURRENT_DATE)::int")) // 1-12
+
+  // Entregable agregado manualmente por fuera del contrato del cliente
+  // (costo extra opcional), no cuenta contra la cuota mensual configurada
+  // en ClientDeliverableConfig al generar los entregables del mes.
+  esExtra          Boolean             @default(false)
+  // Monto libre (varía por entregable) y estatus de cobro de ese extra.
+  // Ambos quedan null cuando esExtra es false.
+  montoExtra       Decimal?            @db.Decimal(10, 2)
+  estatusPagoExtra ExtraPaymentStatus?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  agencyId String
+  agency   Agency @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  // El INGRESO que se registra en Finanzas al marcar este extra como
+  // "Pagado". En la práctica es 0 o 1; se modela como lista porque no hay
+  // una relación 1-a-1 nativa limpia sin una FK única adicional, y esto
+  // además permite consultarlo con un simple `_count`/`include`.
+  transactions Transaction[]
+
+  // Consulta más frecuente del Kanban: "dame las tarjetas de esta agencia
+  // agrupadas/ordenadas por columna, para el mes seleccionado".
+  @@index([agencyId, estado, orden])
+  @@index([agencyId, anio, mes])
+  @@map("deliverables")
+}
+
+// ----------------------------------------------------------------------------
+// CALENDARIO
+// ----------------------------------------------------------------------------
+
+enum EventType {
+  REUNION
+  SESION_FOTOS
+  SESION_VIDEO
+  OTRO
+}
+
+model Event {
+  id          String    @id @default(cuid())
+  titulo      String
+  tipo        EventType
+  fechaInicio DateTime
+  fechaFin    DateTime
+  notas       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  agencyId String
+  agency   Agency  @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  clientId String?
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  @@index([agencyId, fechaInicio])
+  @@map("events")
+}
+
+// ----------------------------------------------------------------------------
+// FINANZAS
+// ----------------------------------------------------------------------------
+
+model BankAccount {
+  id           String   @id @default(cuid())
+  nombreBanco  String
+  saldoActual  Decimal  @default(0) @db.Decimal(12, 2)
+  activa       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  agencyId String
+  agency   Agency @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  transactions Transaction[]
+
+  // El límite de 5 cuentas por agencia NO se modela con una constraint de
+  // Postgres (no existe "COUNT <= N" declarativo simple y portable); se
+  // aplica en la capa de aplicación dentro de la Server Action de creación
+  // (ver actions/bank-accounts.ts), dentro de la misma transacción de lectura.
+  @@index([agencyId])
+  @@map("bank_accounts")
+}
+
+enum TransactionType {
+  INGRESO
+  GASTO
+}
+
+enum ExpenseCategory {
+  PUBLICIDAD
+  HERRAMIENTAS
+  VIATICOS
+  NOMINA
+  OTROS
+}
+
+model Transaction {
+  id             String           @id @default(cuid())
+  tipo           TransactionType
+  monto          Decimal          @db.Decimal(12, 2)
+  concepto       String
+  categoriaGasto ExpenseCategory? // solo aplica cuando tipo = GASTO
+  fecha          DateTime         @default(now())
+  createdAt      DateTime         @default(now())
+
+  agencyId String
+  agency   Agency @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  bankAccountId String
+  bankAccount   BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Restrict)
+
+  // Opcional: si el INGRESO corresponde al abono de mensualidad de un cliente
+  clientId String?
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  // Opcional: si el INGRESO corresponde al pago de un entregable extra.
+  // onDelete SetNull a propósito: si el entregable se borra después, el
+  // registro contable de que ese dinero entró NO debe desaparecer con él.
+  deliverableId String?
+  deliverable   Deliverable? @relation(fields: [deliverableId], references: [id], onDelete: SetNull)
+
+  // Opcional: a qué cargo mensual (mes/año) de un cliente corresponde este
+  // abono, para poder calcular cuánto lleva pagado y cuánto resta de ese mes.
+  clientBillingId String?
+  clientBilling   ClientBilling? @relation(fields: [clientBillingId], references: [id], onDelete: SetNull)
+
+  @@index([agencyId, fecha])
+  @@index([agencyId, tipo])
+  @@map("transactions")
+}
