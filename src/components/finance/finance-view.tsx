@@ -10,6 +10,8 @@ import { BankAccountCard, type BankAccountCardData } from "./bank-account-card";
 import { BankAccountDrawer } from "./bank-account-drawer";
 import { TransactionDrawer } from "./transaction-drawer";
 import { OutstandingBalances } from "./outstanding-balances";
+import { CampaignsSection, type CampaignRow } from "./campaigns-section";
+import type { CampaignDeliverableOption } from "./campaign-drawer";
 import type { OutstandingBalance } from "@/lib/payment-status";
 import {
   TransactionsTable,
@@ -38,6 +40,8 @@ interface FinanceViewProps {
   clients: ClientOption[];
   clientBalances: ClientBalance[];
   outstandingBalances: OutstandingBalance[];
+  campaigns: CampaignRow[];
+  campaignDeliverables: CampaignDeliverableOption[];
   pagination: PaginationInfo;
   filters: TransactionFilters;
 }
@@ -48,6 +52,8 @@ export function FinanceView({
   clients,
   clientBalances,
   outstandingBalances,
+  campaigns,
+  campaignDeliverables,
   pagination,
   filters,
 }: FinanceViewProps) {
@@ -125,6 +131,16 @@ export function FinanceView({
       <div>
         <h2 className="mb-2 text-sm font-semibold">Cuentas por cobrar</h2>
         <OutstandingBalances balances={outstandingBalances} onRegisterPayment={handleRegisterOutstanding} />
+      </div>
+
+      <div>
+        <h2 className="mb-2 text-sm font-semibold">Campañas</h2>
+        <CampaignsSection
+          campaigns={campaigns}
+          clients={clients}
+          deliverables={campaignDeliverables}
+          bankAccounts={bankAccounts}
+        />
       </div>
 
       <BankAccountDrawer open={accountDrawerOpen} onOpenChange={setAccountDrawerOpen} />

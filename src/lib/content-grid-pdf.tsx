@@ -1,18 +1,23 @@
 import { Document, Link, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
 
 export interface ContentGridRow {
-  numero: string; // ej. "Diseño 1", "Video 3"
+  numero: string; // ej. "Diseño 1", "Video 3", "Logo 1"
   titulo: string;
   descripcion?: string | null;
   fechaEntrega?: string | null; // ya formateada, ej. "17/06/2026"
   link?: string | null;
 }
 
+export interface ContentGridSection {
+  tipo: string; // clave del DeliverableType, solo para el `key` de React
+  label: string; // ej. "Diseños", "Sitios web"
+  rows: ContentGridRow[];
+}
+
 export interface ContentGridData {
   clientName: string;
   monthLabel: string; // ej. "Junio 2026"
-  disenos: ContentGridRow[];
-  videos: ContentGridRow[];
+  sections: ContentGridSection[];
 }
 
 const styles = StyleSheet.create({
@@ -105,11 +110,12 @@ function ContentGridDocument({ data }: { data: ContentGridData }) {
           <Text style={styles.monthBadge}>{data.monthLabel.toUpperCase()}</Text>
         </View>
 
-        <Text style={styles.sectionTitle}>DISEÑOS</Text>
-        <GridTable rows={data.disenos} />
-
-        <Text style={styles.sectionTitle}>VIDEOS / REELS</Text>
-        <GridTable rows={data.videos} />
+        {data.sections.map((section) => (
+          <View key={section.tipo}>
+            <Text style={styles.sectionTitle}>{section.label.toUpperCase()}</Text>
+            <GridTable rows={section.rows} />
+          </View>
+        ))}
 
         <Text style={styles.footerBadge}>{data.clientName.toUpperCase()}</Text>
       </Page>

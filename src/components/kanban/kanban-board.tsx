@@ -85,6 +85,19 @@ const SORT_OPTIONS: { value: SortMode; label: string }[] = [
   { value: "TIPO", label: "Tipo" },
 ];
 
+// Orden de "Tipo": Video y Diseño primero (como siempre), luego el resto de
+// tipos en un orden fijo — para que el ordenamiento no salte de posición
+// entre renders.
+const TIPO_SORT_ORDER: DeliverableType[] = [
+  "VIDEO",
+  "DISENO",
+  "LOGO",
+  "SITIO_WEB",
+  "INVITACION_DIGITAL",
+  "LANDING_PAGE",
+  "OTRO",
+];
+
 // Ordena cada columna de forma independiente (nunca mezcla tarjetas entre
 // estatus distintos, cada arreglo ya viene separado por columna). En modo
 // "MANUAL" respeta el orden de arrastre (`orden`); los otros dos son un
@@ -96,8 +109,8 @@ function sortItems(items: DeliverableCardData[], mode: SortMode): DeliverableCar
     sorted.sort((a, b) => a.titulo.localeCompare(b.titulo, "es"));
   } else {
     sorted.sort((a, b) => {
-      if (a.tipo !== b.tipo) return a.tipo === "VIDEO" ? -1 : 1;
-      return a.titulo.localeCompare(b.titulo, "es");
+      const tipoDiff = TIPO_SORT_ORDER.indexOf(a.tipo) - TIPO_SORT_ORDER.indexOf(b.tipo);
+      return tipoDiff !== 0 ? tipoDiff : a.titulo.localeCompare(b.titulo, "es");
     });
   }
   return sorted;

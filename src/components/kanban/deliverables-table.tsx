@@ -8,19 +8,18 @@ import {
   ChevronsDownUpIcon,
   ChevronsUpDownIcon,
   DownloadIcon,
-  ImageIcon,
   LinkIcon,
   PlusIcon,
   Trash2Icon,
-  VideoIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useConfirm } from "@/components/confirm-provider";
 import { deleteDeliverable } from "@/actions/deliverables";
 import { DeliverableDrawer } from "./deliverable-drawer";
 import { NewDeliverableDrawer } from "./new-deliverable-drawer";
 import { KanbanFilters } from "./kanban-filters";
-import { TIPO_ACCENT } from "@/lib/deliverable-tipo";
+import { TIPO_ACCENT, TIPO_ICON, TIPO_LABEL } from "@/lib/deliverable-tipo";
 import { formatDateOnly } from "@/lib/date-only";
 import type { BankAccountOption, DeliverableCardData } from "./kanban-board";
 import type { DeliverableStatus, DeliverableType } from "@prisma/client";
@@ -37,16 +36,6 @@ const STATUS_STYLE: Record<DeliverableStatus, string> = {
   REVISION_CLIENTE: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
   APROBADO: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
   PUBLICADO: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
-};
-
-// Distintivo de tipo siempre visible (independiente de si el entregable
-// tiene o no imagen de referencia) — antes el ícono de tipo desaparecía en
-// cuanto había una miniatura, y ya no se podía distinguir video de diseño
-// de un vistazo. Mismos colores que el borde de las tarjetas en el Tablero
-// (ver TIPO_ACCENT), para que ambas vistas se lean igual.
-const TIPO_BADGE: Record<DeliverableType, { icon: typeof VideoIcon; className: string }> = {
-  VIDEO: { icon: VideoIcon, className: TIPO_ACCENT.VIDEO.badgeClassName },
-  DISENO: { icon: ImageIcon, className: TIPO_ACCENT.DISENO.badgeClassName },
 };
 
 export interface ClientQuota {
@@ -67,6 +56,7 @@ interface DeliverablesTableProps {
 
 export function DeliverablesTable({ deliverables, clients, anio, mes, bankAccounts }: DeliverablesTableProps) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [, startTransition] = useTransition();
   const [selectedCard, setSelectedCard] = React.useState<DeliverableCardData | null>(null);
   const [editDrawerOpen, setEditDrawerOpen] = React.useState(false);
@@ -93,8 +83,13 @@ export function DeliverablesTable({ deliverables, clients, anio, mes, bankAccoun
     setNewDrawerOpen(true);
   }
 
-  function handleDelete(deliverable: DeliverableCardData) {
-    if (!window.confirm(`¿Eliminar "${deliverable.titulo}"?`)) return;
+  async function handleDelete(deliverable: DeliverableCardData) {
+    const ok = await confirm({
+      title: `¿Eliminar "${deliverable.titulo}"?`,
+      confirmText: "Eliminar",
+      variant: "destructive",
+    });
+    if (!ok) return;
     startTransition(async () => {
       await deleteDeliverable(deliverable.id);
       router.refresh();
@@ -211,7 +206,7 @@ export function DeliverablesTable({ deliverables, clients, anio, mes, bankAccoun
             ) : (
               <div className="divide-y">
                 {items.map((item) => {
-                  const TipoIcon = TIPO_BADGE[item.tipo].icon;
+                  const TipoIcon = TIPO_ICON[item.tipo];
                   return (
                   <div
                     key={item.id}
@@ -220,9 +215,9 @@ export function DeliverablesTable({ deliverables, clients, anio, mes, bankAccoun
                     <span
                       className={cn(
                         "flex size-6 shrink-0 items-center justify-center rounded-md",
-                        TIPO_BADGE[item.tipo].className
+                        TIPO_ACCENT[item.tipo].badgeClassName
                       )}
-                      title={item.tipo === "VIDEO" ? "Video" : "Diseño"}
+                      title={TIPO_LABEL[item.tipo]}
                     >
                       <TipoIcon className="size-3.5" />
                     </span>
@@ -232,7 +227,7 @@ export function DeliverablesTable({ deliverables, clients, anio, mes, bankAccoun
                       <img src={item.archivoUrl} alt="" className="size-8 shrink-0 rounded object-cover" />
                     ) : (
                       <span className="flex size-8 shrink-0 items-center justify-center text-muted-foreground">
-                        {item.tipo === "VIDEO" ? <VideoIcon className="size-4" /> : <ImageIcon className="size-4" />}
+                        <TipoIcon className="size-4" />
                       </span>
                     )}
 

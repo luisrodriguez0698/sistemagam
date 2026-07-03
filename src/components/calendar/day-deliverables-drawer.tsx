@@ -3,9 +3,8 @@
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useRouter, usePathname } from "next/navigation";
-import { ImageIcon, VideoIcon } from "lucide-react";
 import { AppDrawer } from "@/components/ui/app-drawer";
-import { TIPO_ACCENT } from "@/lib/deliverable-tipo";
+import { TIPO_ACCENT, TIPO_ICON } from "@/lib/deliverable-tipo";
 import { cn } from "@/lib/utils";
 import type { CalendarDeliverableData } from "./month-calendar";
 import type { DeliverableStatus } from "@prisma/client";
@@ -58,7 +57,9 @@ export function DayDeliverablesDrawer({ open, onOpenChange, date, deliverables }
       maxWidth="xl"
     >
       <div className="divide-y rounded-xl border">
-        {deliverables.map((d) => (
+        {deliverables.map((d) => {
+          const TipoIcon = TIPO_ICON[d.tipo];
+          return (
           <button
             key={d.id}
             type="button"
@@ -71,7 +72,7 @@ export function DayDeliverablesDrawer({ open, onOpenChange, date, deliverables }
                 TIPO_ACCENT[d.tipo].badgeClassName
               )}
             >
-              {d.tipo === "VIDEO" ? <VideoIcon className="size-3.5" /> : <ImageIcon className="size-3.5" />}
+              <TipoIcon className="size-3.5" />
             </span>
             <div className="min-w-0 flex-1">
               <p className="truncate font-medium">{d.titulo}</p>
@@ -81,7 +82,8 @@ export function DayDeliverablesDrawer({ open, onOpenChange, date, deliverables }
               {STATUS_LABEL[d.estado]}
             </span>
           </button>
-        ))}
+          );
+        })}
       </div>
     </AppDrawer>
   );

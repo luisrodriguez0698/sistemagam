@@ -40,6 +40,7 @@ model Agency {
   bankAccounts   BankAccount[]
   transactions   Transaction[]
   clientBillings ClientBilling[]
+  campaigns      Campaign[]
 
   @@map("agencies")
 }
@@ -96,9 +97,18 @@ enum PaymentStatus {
   VENCIDO
 }
 
+// Solo VIDEO y DISENO participan de la cuota mensual recurrente
+// (ClientDeliverableConfig / generateMonthlyDeliverables) — los demás son
+// proyectos únicos que solo pueden crearse como entregable "extra"
+// (esExtra=true), nunca como parte de la parrilla recurrente.
 enum DeliverableType {
   VIDEO
   DISENO
+  LOGO
+  SITIO_WEB
+  INVITACION_DIGITAL
+  LANDING_PAGE
+  OTRO
 }
 
 model Client {
@@ -135,6 +145,7 @@ model Client {
   events            Event[]
   transactions      Transaction[]
   billings          ClientBilling[]
+  campaigns         Campaign[]
 
   @@index([agencyId])
   @@index([agencyId, estatusPago])
@@ -254,6 +265,10 @@ model Deliverable {
   // además permite consultarlo con un simple `_count`/`include`.
   transactions Transaction[]
 
+  // Diseño/video usado como creativo en alguna campaña de publicidad (ver
+  // Campaign) — opcional, un entregable puede no pautarse nunca.
+  campaigns Campaign[]
+
   // Consulta más frecuente del Kanban: "dame las tarjetas de esta agencia
   // agrupadas/ordenadas por columna, para el mes seleccionado".
   @@index([agencyId, estado, orden])
@@ -359,7 +374,51 @@ model Transaction {
   clientBillingId String?
   clientBilling   ClientBilling? @relation(fields: [clientBillingId], references: [id], onDelete: SetNull)
 
+  // Opcional: si este GASTO es la inversión publicitaria de una Campaign
+  // pagada por la agencia (ver Campaign.pagadoPor).
+  campaignId String?
+  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
   @@index([agencyId, fecha])
   @@index([agencyId, tipo])
   @@map("transactions")
+}
+
+enum CampaignPayer {
+  AGENCIA
+  CLIENTE
+}
+
+// Inversión publicitaria de un cliente, opcionalmente ligada al
+// diseño/video que se usó como creativo. Si la paga la agencia (con su
+// propio dinero), se genera un GASTO en Finanzas (categoría Publicidad)
+// que descuenta la cuenta bancaria elegida; si la paga el cliente con su
+// propia tarjeta, solo queda como registro informativo — no mueve la
+// cartera de la agencia.
+model Campaign {
+  id             String        @id @default(cuid())
+  nombre         String
+  montoInvertido Decimal       @db.Decimal(10, 2)
+  pagadoPor      CampaignPayer
+  fecha          DateTime      @default(now())
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  agencyId String
+  agency   Agency @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  deliverableId String?
+  deliverable   Deliverable? @relation(fields: [deliverableId], references: [id], onDelete: SetNull)
+
+  // El GASTO generado en Finanzas cuando pagadoPor = AGENCIA. Borrar la
+  // campaña NO borra ni revierte esta transacción (mismo criterio que un
+  // Deliverable borrado: el registro contable de que el dinero salió se
+  // queda) — para revertir el gasto real, se borra desde Finanzas.
+  transactions Transaction[]
+
+  @@index([agencyId])
+  @@index([clientId])
+  @@map("campaigns")
 }

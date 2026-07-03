@@ -3,8 +3,9 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { prisma } from "@/lib/prisma";
 import { getTenantSession } from "@/lib/tenant";
-import { renderContentGridPdf, type ContentGridRow } from "@/lib/content-grid-pdf";
+import { renderContentGridPdf, type ContentGridRow, type ContentGridSection } from "@/lib/content-grid-pdf";
 import { formatDateOnly } from "@/lib/date-only";
+import { isRecurringTipo, TIPO_LABEL, TIPO_ORDER, TIPO_SECTION_LABEL } from "@/lib/deliverable-tipo";
 
 interface RouteParams {
   params: Promise<{ clientId: string }>;
@@ -34,27 +35,38 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     orderBy: { titulo: "asc" },
   });
 
-  let disenoCounter = 0;
-  let videoCounter = 0;
-  const toRow =
-    (tipo: "DISENO" | "VIDEO") =>
-    (d: (typeof deliverables)[number]): ContentGridRow => ({
-      numero: tipo === "DISENO" ? `Diseño ${++disenoCounter}` : `Video ${++videoCounter}`,
+  function toRow(d: (typeof deliverables)[number], numero: string): ContentGridRow {
+    return {
+      numero,
       titulo: d.titulo,
       descripcion: d.descripcion,
       fechaEntrega: d.fechaEntrega
         ? formatDateOnly(d.fechaEntrega, { day: "2-digit", month: "2-digit", year: "numeric" })
         : null,
       link: d.linkEjemplo,
-    });
+    };
+  }
+
+  // Diseño y Video siempre aparecen (son la parrilla recurrente, aunque
+  // esté vacía ese mes); los demás tipos (proyectos únicos) solo si el
+  // cliente tiene al menos uno ese mes, para no llenar el PDF de secciones
+  // vacías que nunca usa.
+  const sections: ContentGridSection[] = TIPO_ORDER.filter(
+    (tipo) => isRecurringTipo(tipo) || deliverables.some((d) => d.tipo === tipo)
+  ).map((tipo) => {
+    let counter = 0;
+    const rows = deliverables
+      .filter((d) => d.tipo === tipo)
+      .map((d) => toRow(d, `${TIPO_LABEL[tipo]} ${++counter}`));
+    return { tipo, label: TIPO_SECTION_LABEL[tipo], rows };
+  });
 
   const monthLabel = format(new Date(anio, mes - 1, 1), "MMMM yyyy", { locale: es });
 
   const pdfBuffer = await renderContentGridPdf({
     clientName: client.nombreNegocio,
     monthLabel,
-    disenos: deliverables.filter((d) => d.tipo === "DISENO").map(toRow("DISENO")),
-    videos: deliverables.filter((d) => d.tipo === "VIDEO").map(toRow("VIDEO")),
+    sections,
   });
 
   const filename = `parrilla-${client.nombreNegocio.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-${anio}-${String(mes).padStart(2, "0")}.pdf`;

@@ -3,7 +3,8 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { prisma } from "@/lib/prisma";
 import { getTenantSession } from "@/lib/tenant";
-import { renderMonthlySummaryPdf, type SummaryItem } from "@/lib/monthly-summary-pdf";
+import { renderMonthlySummaryPdf, type SummaryItem, type SummarySection } from "@/lib/monthly-summary-pdf";
+import { isRecurringTipo, TIPO_ORDER, TIPO_SECTION_LABEL } from "@/lib/deliverable-tipo";
 
 interface RouteParams {
   params: Promise<{ clientId: string }>;
@@ -41,6 +42,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     imageUrl: d.archivoUrl,
   });
 
+  // Diseño y Video siempre aparecen (son la parrilla recurrente, aunque
+  // esté vacía ese mes); los demás tipos (proyectos únicos) solo si el
+  // cliente tiene al menos uno ese mes.
+  const sections: SummarySection[] = TIPO_ORDER.filter(
+    (tipo) => isRecurringTipo(tipo) || deliverables.some((d) => d.tipo === tipo)
+  ).map((tipo) => ({
+    tipo,
+    label: TIPO_SECTION_LABEL[tipo],
+    items: deliverables.filter((d) => d.tipo === tipo).map(toSummaryItem),
+  }));
+
   const monthLabel = format(new Date(anio, mes - 1, 1), "MMMM yyyy", { locale: es });
 
   const pdfBuffer = await renderMonthlySummaryPdf({
@@ -49,8 +61,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     monthLabel,
     videosQuota: client.deliverableConfig.find((c) => c.tipo === "VIDEO")?.cantidadMensual ?? 0,
     disenosQuota: client.deliverableConfig.find((c) => c.tipo === "DISENO")?.cantidadMensual ?? 0,
-    disenos: deliverables.filter((d) => d.tipo === "DISENO").map(toSummaryItem),
-    videos: deliverables.filter((d) => d.tipo === "VIDEO").map(toSummaryItem),
+    sections,
   });
 
   const filename = `resumen-${client.nombreNegocio.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-${anio}-${String(mes).padStart(2, "0")}.pdf`;

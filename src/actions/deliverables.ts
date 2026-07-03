@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { getTenantSession } from "@/lib/tenant";
 import { deleteR2Object, uploadDeliverableImage as uploadToR2 } from "@/lib/r2";
 import { DeliverableStatus, DeliverableType, ExtraPaymentStatus } from "@prisma/client";
+import { isRecurringTipo } from "@/lib/deliverable-tipo";
 
 const moveSchema = z.object({
   deliverableId: z.string().min(1),
@@ -156,6 +157,14 @@ const createDeliverableSchema = z
   .refine((data) => !(data.esExtra && data.estatusPagoExtra === "PAGADO") || !!data.bankAccountId, {
     message: "Selecciona la cuenta bancaria que recibió el pago",
     path: ["bankAccountId"],
+  })
+  // Fuera de Video/Diseño no hay cuota mensual contra la cual "no contar" —
+  // son proyectos únicos, así que siempre deben ir marcados como extra,
+  // sin importar lo que mande el cliente (el formulario ya lo fuerza, esto
+  // es el resguardo del lado del servidor).
+  .refine((data) => isRecurringTipo(data.tipo) || data.esExtra, {
+    message: "Este tipo de entregable siempre debe registrarse como extra",
+    path: ["esExtra"],
   });
 
 /**

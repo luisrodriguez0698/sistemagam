@@ -20,6 +20,8 @@ import { DeliverableStatus, ExtraPaymentStatus } from "@prisma/client";
 import type { BankAccountOption, DeliverableCardData } from "./kanban-board";
 import { DeliverableImageUpload } from "./deliverable-image-upload";
 import { CheckIcon, CopyIcon } from "lucide-react";
+import { TIPO_LABEL } from "@/lib/deliverable-tipo";
+import { useConfirm } from "@/components/confirm-provider";
 
 const STATUS_LABEL: Record<DeliverableStatus, string> = {
   EN_PROCESO: "En proceso",
@@ -45,6 +47,7 @@ export function DeliverableDrawer({
   onDeleted,
   bankAccounts,
 }: DeliverableDrawerProps) {
+  const confirm = useConfirm();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = React.useState<string | null>(null);
   const [titulo, setTitulo] = React.useState("");
@@ -130,9 +133,15 @@ export function DeliverableDrawer({
     });
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!deliverable) return;
-    if (!window.confirm(`¿Eliminar "${deliverable.titulo}"? Esta acción no se puede deshacer.`)) return;
+    const ok = await confirm({
+      title: `¿Eliminar "${deliverable.titulo}"?`,
+      description: "Esta acción no se puede deshacer.",
+      confirmText: "Eliminar",
+      variant: "destructive",
+    });
+    if (!ok) return;
     startTransition(async () => {
       await deleteDeliverable(deliverable.id);
       onDeleted(deliverable.id);
@@ -145,7 +154,7 @@ export function DeliverableDrawer({
       open={open}
       onOpenChange={onOpenChange}
       title={deliverable.titulo}
-      description={`${deliverable.clienteNombre} · ${deliverable.tipo === "VIDEO" ? "Video" : "Diseño"}${deliverable.esExtra ? " · Extra" : ""}`}
+      description={`${deliverable.clienteNombre} · ${TIPO_LABEL[deliverable.tipo]}${deliverable.esExtra ? " · Extra" : ""}`}
       maxWidth="2xl"
     >
       <form onSubmit={handleSubmit} className="space-y-5">

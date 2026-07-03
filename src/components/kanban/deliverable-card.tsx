@@ -2,9 +2,9 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { CalendarIcon, ImageIcon, VideoIcon } from "lucide-react";
+import { CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { TIPO_ACCENT } from "@/lib/deliverable-tipo";
+import { TIPO_ACCENT, TIPO_ICON, TIPO_LABEL } from "@/lib/deliverable-tipo";
 import { formatDateOnly } from "@/lib/date-only";
 import type { DeliverableCardData } from "./kanban-board";
 
@@ -24,6 +24,7 @@ export function DeliverableCard({ deliverable, onClick }: DeliverableCardProps) 
   };
 
   const tipoAccent = TIPO_ACCENT[deliverable.tipo];
+  const TipoIcon = TIPO_ICON[deliverable.tipo];
 
   return (
     <div
@@ -55,12 +56,8 @@ export function DeliverableCard({ deliverable, onClick }: DeliverableCardProps) 
             tipoAccent.badgeClassName
           )}
         >
-          {deliverable.tipo === "VIDEO" ? (
-            <VideoIcon className="size-3" />
-          ) : (
-            <ImageIcon className="size-3" />
-          )}
-          {deliverable.tipo === "VIDEO" ? "Video" : "Diseño"}
+          <TipoIcon className="size-3" />
+          {TIPO_LABEL[deliverable.tipo]}
         </span>
         {deliverable.esExtra && (
           <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">

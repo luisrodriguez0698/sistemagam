@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { createDeliverable } from "@/actions/deliverables";
 import { DeliverableType, ExtraPaymentStatus } from "@prisma/client";
+import { isRecurringTipo, TIPO_LABEL, TIPO_ORDER } from "@/lib/deliverable-tipo";
 import type { BankAccountOption } from "./kanban-board";
 
 interface ClientOption {
@@ -62,6 +63,14 @@ export function NewDeliverableDrawer({
   const [bankAccountId, setBankAccountId] = React.useState("");
 
   const needsBankAccount = esExtra && estatusPagoExtra === "PAGADO";
+  // Fuera de Video/Diseño, todo es un proyecto único — nunca forma parte de
+  // la cuota mensual recurrente, así que siempre se crea como "extra".
+  const tipoForzaExtra = !isRecurringTipo(tipo);
+
+  function handleTipoChange(value: DeliverableType) {
+    setTipo(value);
+    if (!isRecurringTipo(value)) setEsExtra(true);
+  }
 
   React.useEffect(() => {
     if (!open) return;
@@ -139,13 +148,16 @@ export function NewDeliverableDrawer({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label>Tipo</Label>
-            <Select value={tipo} onValueChange={(v) => setTipo(v as DeliverableType)}>
+            <Select value={tipo} onValueChange={(v) => handleTipoChange(v as DeliverableType)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="VIDEO">Video</SelectItem>
-                <SelectItem value="DISENO">Diseño</SelectItem>
+                {TIPO_ORDER.map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {TIPO_LABEL[value]}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -191,10 +203,12 @@ export function NewDeliverableDrawer({
             <div className="text-sm">
               <p className="font-medium">Es un entregable extra (costo adicional)</p>
               <p className="text-muted-foreground">
-                No cuenta contra la cuota mensual del contrato de este cliente.
+                {tipoForzaExtra
+                  ? `${TIPO_LABEL[tipo]} siempre es un proyecto único, no forma parte de la cuota mensual.`
+                  : "No cuenta contra la cuota mensual del contrato de este cliente."}
               </p>
             </div>
-            <Switch checked={esExtra} onCheckedChange={setEsExtra} />
+            <Switch checked={esExtra} onCheckedChange={setEsExtra} disabled={tipoForzaExtra} />
           </div>
 
           {esExtra && (

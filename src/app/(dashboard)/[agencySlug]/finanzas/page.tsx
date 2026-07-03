@@ -33,7 +33,7 @@ export default async function FinanzasPage({ searchParams }: FinanzasPageProps) 
       : {}),
   };
 
-  const [bankAccounts, transactions, totalCount, clients] = await Promise.all([
+  const [bankAccounts, transactions, totalCount, clients, campaigns, deliverablesForCampaigns] = await Promise.all([
     prisma.bankAccount.findMany({
       where: { agencyId, activa: true },
       orderBy: { createdAt: "asc" },
@@ -50,6 +50,19 @@ export default async function FinanzasPage({ searchParams }: FinanzasPageProps) 
       where: { agencyId, activo: true },
       select: { id: true, nombreNegocio: true },
       orderBy: { nombreNegocio: "asc" },
+    }),
+    prisma.campaign.findMany({
+      where: { agencyId },
+      include: {
+        client: { select: { nombreNegocio: true } },
+        deliverable: { select: { titulo: true } },
+      },
+      orderBy: { fecha: "desc" },
+    }),
+    prisma.deliverable.findMany({
+      where: { agencyId },
+      select: { id: true, titulo: true, clientId: true, anio: true, mes: true },
+      orderBy: [{ anio: "desc" }, { mes: "desc" }],
     }),
   ]);
 
@@ -80,6 +93,16 @@ export default async function FinanzasPage({ searchParams }: FinanzasPageProps) 
         saldoPendiente: s.saldoPendiente,
       }))}
       outstandingBalances={outstandingBalances}
+      campaigns={campaigns.map((c) => ({
+        id: c.id,
+        nombre: c.nombre,
+        clienteNombre: c.client.nombreNegocio,
+        deliverableTitulo: c.deliverable?.titulo ?? null,
+        montoInvertido: Number(c.montoInvertido),
+        pagadoPor: c.pagadoPor,
+        fecha: c.fecha.toISOString(),
+      }))}
+      campaignDeliverables={deliverablesForCampaigns}
       pagination={{ page, pageSize: PAGE_SIZE, totalCount }}
       filters={{ from: params.from ?? "", to: params.to ?? "", tipo: params.tipo ?? "" }}
     />

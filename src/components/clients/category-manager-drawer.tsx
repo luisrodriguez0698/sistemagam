@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createCategory } from "@/actions/clients";
 import { deleteCategory, updateCategory } from "@/actions/categories";
+import { useConfirm } from "@/components/confirm-provider";
 
 export interface CategoryWithCount {
   id: string;
@@ -24,6 +25,7 @@ interface CategoryManagerDrawerProps {
 
 export function CategoryManagerDrawer({ open, onOpenChange, categories }: CategoryManagerDrawerProps) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [isPending, startTransition] = useTransition();
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editingName, setEditingName] = React.useState("");
@@ -43,12 +45,17 @@ export function CategoryManagerDrawer({ open, onOpenChange, categories }: Catego
     });
   }
 
-  function handleDelete(category: CategoryWithCount) {
-    const confirmMessage =
-      category.clientCount > 0
-        ? `"${category.name}" tiene ${category.clientCount} cliente(s) asignado(s). Se quedarán sin categoría. ¿Eliminar de todas formas?`
-        : `¿Eliminar la categoría "${category.name}"?`;
-    if (!window.confirm(confirmMessage)) return;
+  async function handleDelete(category: CategoryWithCount) {
+    const ok = await confirm({
+      title: `¿Eliminar la categoría "${category.name}"?`,
+      description:
+        category.clientCount > 0
+          ? `Tiene ${category.clientCount} cliente(s) asignado(s) — se quedarán sin categoría.`
+          : undefined,
+      confirmText: "Eliminar",
+      variant: "destructive",
+    });
+    if (!ok) return;
 
     startTransition(async () => {
       await deleteCategory(category.id);

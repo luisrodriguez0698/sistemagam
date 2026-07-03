@@ -6,14 +6,19 @@ export interface SummaryItem {
   imageUrl?: string | null;
 }
 
+export interface SummarySection {
+  tipo: string; // clave del DeliverableType, solo para el `key` de React
+  label: string; // ej. "Diseños", "Sitios web"
+  items: SummaryItem[];
+}
+
 export interface MonthlySummaryData {
   agencyName: string;
   clientName: string;
   monthLabel: string; // ej. "Junio 2026"
   videosQuota: number;
   disenosQuota: number;
-  disenos: SummaryItem[];
-  videos: SummaryItem[];
+  sections: SummarySection[];
 }
 
 const styles = StyleSheet.create({
@@ -112,11 +117,12 @@ function MonthlySummaryDocument({ data }: { data: MonthlySummaryData }) {
           Parrilla de contenido · {data.disenosQuota} diseños y {data.videosQuota} videos/reels mensuales
         </Text>
 
-        <Text style={styles.sectionBand}>DISEÑOS</Text>
-        <ItemGrid items={data.disenos} />
-
-        <Text style={styles.sectionBand}>VIDEOS / REELS</Text>
-        <ItemGrid items={data.videos} />
+        {data.sections.map((section) => (
+          <View key={section.tipo}>
+            <Text style={styles.sectionBand}>{section.label.toUpperCase()}</Text>
+            <ItemGrid items={section.items} />
+          </View>
+        ))}
 
         <Text style={styles.footer} fixed>
           {data.agencyName} · Resumen generado automáticamente

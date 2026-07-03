@@ -2,10 +2,17 @@
 
 import * as React from "react";
 import { ChevronDownIcon, SearchIcon, UsersIcon } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { TIPO_LABEL, TIPO_ORDER } from "@/lib/deliverable-tipo";
 import type { DeliverableType } from "@prisma/client";
 
 export interface ClientFilterOption {
@@ -23,12 +30,6 @@ interface KanbanFiltersProps {
   tipoFilter: DeliverableType | "ALL";
   onTipoFilterChange: (tipo: DeliverableType | "ALL") => void;
 }
-
-const TIPO_OPTIONS: { value: DeliverableType | "ALL"; label: string }[] = [
-  { value: "ALL", label: "Todos" },
-  { value: "VIDEO", label: "Video" },
-  { value: "DISENO", label: "Diseño" },
-];
 
 /**
  * Filtros del tablero: por cliente (checklist, útil cuando hay muchos
@@ -116,22 +117,22 @@ export function KanbanFilters({
         </PopoverContent>
       </Popover>
 
-      <div className="flex rounded-lg border p-0.5">
-        {TIPO_OPTIONS.map((opt) => (
-          <button
-            key={opt.value}
-            onClick={() => onTipoFilterChange(opt.value)}
-            className={cn(
-              "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-              tipoFilter === opt.value
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:bg-muted"
-            )}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
+      <Select
+        value={tipoFilter}
+        onValueChange={(v) => onTipoFilterChange(v as DeliverableType | "ALL")}
+      >
+        <SelectTrigger className="h-9 w-auto min-w-36">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="ALL">Todos los tipos</SelectItem>
+          {TIPO_ORDER.map((tipo) => (
+            <SelectItem key={tipo} value={tipo}>
+              {TIPO_LABEL[tipo]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }

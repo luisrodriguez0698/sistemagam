@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { createTransaction, deleteTransaction, updateTransaction } from "@/actions/transactions";
+import { useConfirm } from "@/components/confirm-provider";
 import { ExpenseCategory, TransactionType } from "@prisma/client";
 import type { ClientBalance } from "./finance-view";
 import type { TransactionRow } from "./transactions-table";
@@ -76,6 +77,7 @@ export function TransactionDrawer({
   defaultConcepto,
   defaultMonto,
 }: TransactionDrawerProps) {
+  const confirm = useConfirm();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = React.useState<string | null>(null);
   const [concepto, setConcepto] = React.useState("");
@@ -149,9 +151,15 @@ export function TransactionDrawer({
     });
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!transaction) return;
-    if (!window.confirm(`¿Eliminar "${transaction.concepto}"? Esto también revierte el saldo de la cuenta.`)) return;
+    const ok = await confirm({
+      title: `¿Eliminar "${transaction.concepto}"?`,
+      description: "Esto también revierte el saldo de la cuenta.",
+      confirmText: "Eliminar",
+      variant: "destructive",
+    });
+    if (!ok) return;
     startTransition(async () => {
       await deleteTransaction(transaction.id);
       onOpenChange(false);

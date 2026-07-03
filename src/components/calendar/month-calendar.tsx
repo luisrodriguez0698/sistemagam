@@ -15,10 +15,10 @@ import {
   startOfWeek,
 } from "date-fns";
 import { es } from "date-fns/locale";
-import { ChevronLeftIcon, ChevronRightIcon, ImageIcon, VideoIcon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { TIPO_ACCENT } from "@/lib/deliverable-tipo";
+import { TIPO_ACCENT, TIPO_ICON } from "@/lib/deliverable-tipo";
 import { EventDrawer } from "./event-drawer";
 import { DayDeliverablesDrawer } from "./day-deliverables-drawer";
 import type { DeliverableStatus, DeliverableType, EventType } from "@prisma/client";
@@ -176,23 +176,22 @@ export function MonthCalendar({ year, month, events, deliverables, clients }: Mo
                   </span>
                 )}
 
-                {dayDeliverables.slice(0, 2).map((d) => (
-                  <div
-                    key={d.id}
-                    onClick={(e) => openDayDeliverables(day, dayDeliverables, e)}
-                    className={cn(
-                      "flex items-center gap-1 truncate rounded-md px-1.5 py-0.5 text-[11px] hover:opacity-80",
-                      TIPO_ACCENT[d.tipo].badgeClassName
-                    )}
-                  >
-                    {d.tipo === "VIDEO" ? (
-                      <VideoIcon className="size-2.5 shrink-0" />
-                    ) : (
-                      <ImageIcon className="size-2.5 shrink-0" />
-                    )}
-                    <span className="truncate">{d.titulo}</span>
-                  </div>
-                ))}
+                {dayDeliverables.slice(0, 2).map((d) => {
+                  const TipoIcon = TIPO_ICON[d.tipo];
+                  return (
+                    <div
+                      key={d.id}
+                      onClick={(e) => openDayDeliverables(day, dayDeliverables, e)}
+                      className={cn(
+                        "flex items-center gap-1 truncate rounded-md px-1.5 py-0.5 text-[11px] hover:opacity-80",
+                        TIPO_ACCENT[d.tipo].badgeClassName
+                      )}
+                    >
+                      <TipoIcon className="size-2.5 shrink-0" />
+                      <span className="truncate">{d.titulo}</span>
+                    </div>
+                  );
+                })}
                 {dayDeliverables.length > 2 && (
                   <span
                     onClick={(e) => openDayDeliverables(day, dayDeliverables, e)}

@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { DateRangeFilter } from "./date-range-filter";
 import { deleteTransaction } from "@/actions/transactions";
+import { useConfirm } from "@/components/confirm-provider";
 
 export interface TransactionRow {
   id: string;
@@ -66,6 +67,7 @@ export function TransactionsTable({ transactions, pagination, filters, onEdit }:
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const confirm = useConfirm();
   const [, startTransition] = useTransition();
 
   const totalPages = Math.max(1, Math.ceil(pagination.totalCount / pagination.pageSize));
@@ -87,8 +89,14 @@ export function TransactionsTable({ transactions, pagination, filters, onEdit }:
     updateParams({ page: page > 1 ? String(page) : undefined });
   }
 
-  function handleDelete(transaction: TransactionRow) {
-    if (!window.confirm(`¿Eliminar "${transaction.concepto}"? Esto también revierte el saldo de la cuenta.`)) return;
+  async function handleDelete(transaction: TransactionRow) {
+    const ok = await confirm({
+      title: `¿Eliminar "${transaction.concepto}"?`,
+      description: "Esto también revierte el saldo de la cuenta.",
+      confirmText: "Eliminar",
+      variant: "destructive",
+    });
+    if (!ok) return;
     startTransition(async () => {
       await deleteTransaction(transaction.id);
       router.refresh();
