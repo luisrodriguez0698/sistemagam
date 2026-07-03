@@ -3,14 +3,26 @@
 import * as React from "react";
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { DownloadIcon, ImageIcon, LinkIcon, PlusIcon, Trash2Icon, VideoIcon } from "lucide-react";
+import {
+  ChevronDownIcon,
+  ChevronsDownUpIcon,
+  ChevronsUpDownIcon,
+  DownloadIcon,
+  ImageIcon,
+  LinkIcon,
+  PlusIcon,
+  Trash2Icon,
+  VideoIcon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { deleteDeliverable } from "@/actions/deliverables";
 import { DeliverableDrawer } from "./deliverable-drawer";
 import { NewDeliverableDrawer } from "./new-deliverable-drawer";
+import { KanbanFilters } from "./kanban-filters";
+import { TIPO_ACCENT } from "@/lib/deliverable-tipo";
 import type { BankAccountOption, DeliverableCardData } from "./kanban-board";
-import type { DeliverableStatus } from "@prisma/client";
+import type { DeliverableStatus, DeliverableType } from "@prisma/client";
 
 const STATUS_LABEL: Record<DeliverableStatus, string> = {
   EN_PROCESO: "En proceso",
@@ -26,9 +38,20 @@ const STATUS_STYLE: Record<DeliverableStatus, string> = {
   PUBLICADO: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
 };
 
+// Distintivo de tipo siempre visible (independiente de si el entregable
+// tiene o no imagen de referencia) — antes el ícono de tipo desaparecía en
+// cuanto había una miniatura, y ya no se podía distinguir video de diseño
+// de un vistazo. Mismos colores que el borde de las tarjetas en el Tablero
+// (ver TIPO_ACCENT), para que ambas vistas se lean igual.
+const TIPO_BADGE: Record<DeliverableType, { icon: typeof VideoIcon; className: string }> = {
+  VIDEO: { icon: VideoIcon, className: TIPO_ACCENT.VIDEO.badgeClassName },
+  DISENO: { icon: ImageIcon, className: TIPO_ACCENT.DISENO.badgeClassName },
+};
+
 export interface ClientQuota {
   id: string;
   nombreNegocio: string;
+  colorHex: string;
   videosMensuales: number;
   disenosMensuales: number;
 }
@@ -48,6 +71,11 @@ export function DeliverablesTable({ deliverables, clients, anio, mes, bankAccoun
   const [editDrawerOpen, setEditDrawerOpen] = React.useState(false);
   const [newDrawerOpen, setNewDrawerOpen] = React.useState(false);
   const [newDrawerClientId, setNewDrawerClientId] = React.useState<string | undefined>(undefined);
+  const [tipoFilter, setTipoFilter] = React.useState<DeliverableType | "ALL">("ALL");
+  const [selectedClientIds, setSelectedClientIds] = React.useState<Set<string>>(
+    () => new Set(clients.map((c) => c.id))
+  );
+  const [collapsedClientIds, setCollapsedClientIds] = React.useState<Set<string>>(() => new Set());
 
   const byClient = new Map<string, DeliverableCardData[]>();
   for (const d of deliverables) {
@@ -72,22 +100,91 @@ export function DeliverablesTable({ deliverables, clients, anio, mes, bankAccoun
     });
   }
 
+  function toggleCollapsed(clientId: string) {
+    setCollapsedClientIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(clientId)) next.delete(clientId);
+      else next.add(clientId);
+      return next;
+    });
+  }
+
+  const visibleClients = clients.filter((c) => selectedClientIds.has(c.id));
+
   return (
     <div className="space-y-4">
-      {clients.map((client) => {
-        const items = (byClient.get(client.id) ?? []).sort((a, b) => a.titulo.localeCompare(b.titulo));
-        const videosCount = items.filter((d) => d.tipo === "VIDEO" && !d.esExtra).length;
-        const disenosCount = items.filter((d) => d.tipo === "DISENO" && !d.esExtra).length;
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <KanbanFilters
+          clients={clients}
+          selectedClientIds={selectedClientIds}
+          onToggleClient={(clientId) =>
+            setSelectedClientIds((prev) => {
+              const next = new Set(prev);
+              if (next.has(clientId)) next.delete(clientId);
+              else next.add(clientId);
+              return next;
+            })
+          }
+          onSelectAllClients={() => setSelectedClientIds(new Set(clients.map((c) => c.id)))}
+          onSelectNoClients={() => setSelectedClientIds(new Set())}
+          tipoFilter={tipoFilter}
+          onTipoFilterChange={setTipoFilter}
+        />
+
+        <div className="flex gap-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="gap-1.5 text-xs"
+            onClick={() => setCollapsedClientIds(new Set())}
+          >
+            <ChevronsUpDownIcon className="size-3.5" />
+            Expandir todos
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="gap-1.5 text-xs"
+            onClick={() => setCollapsedClientIds(new Set(clients.map((c) => c.id)))}
+          >
+            <ChevronsDownUpIcon className="size-3.5" />
+            Colapsar todos
+          </Button>
+        </div>
+      </div>
+
+      {visibleClients.map((client) => {
+        const allItems = (byClient.get(client.id) ?? []).sort((a, b) => a.titulo.localeCompare(b.titulo));
+        const items = allItems.filter((d) => tipoFilter === "ALL" || d.tipo === tipoFilter);
+        const videosCount = allItems.filter((d) => d.tipo === "VIDEO" && !d.esExtra).length;
+        const disenosCount = allItems.filter((d) => d.tipo === "DISENO" && !d.esExtra).length;
+        const isCollapsed = collapsedClientIds.has(client.id);
 
         return (
           <div key={client.id} className="overflow-hidden rounded-2xl border">
             <div className="flex flex-wrap items-center justify-between gap-2 bg-muted/40 px-4 py-3">
-              <div>
-                <p className="font-semibold">{client.nombreNegocio}</p>
-                <p className="text-xs text-muted-foreground">
-                  {videosCount}/{client.videosMensuales} videos · {disenosCount}/{client.disenosMensuales} diseños
-                </p>
-              </div>
+              <button
+                type="button"
+                onClick={() => toggleCollapsed(client.id)}
+                className="flex min-w-0 flex-1 items-center gap-2 text-left"
+              >
+                <ChevronDownIcon
+                  className={cn("size-4 shrink-0 text-muted-foreground transition-transform", isCollapsed && "-rotate-90")}
+                />
+                <div className="min-w-0">
+                  <p className="flex items-center gap-1.5 font-semibold">
+                    <span
+                      className="size-2.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: client.colorHex }}
+                      aria-hidden
+                    />
+                    {client.nombreNegocio}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {videosCount}/{client.videosMensuales} videos · {disenosCount}/{client.disenosMensuales} diseños
+                  </p>
+                </div>
+              </button>
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" variant="outline" className="gap-1" asChild>
                   <a href={`/api/clientes/${client.id}/parrilla?anio=${anio}&mes=${mes}`} target="_blank" rel="noreferrer">
@@ -108,15 +205,27 @@ export function DeliverablesTable({ deliverables, clients, anio, mes, bankAccoun
               </div>
             </div>
 
-            {items.length === 0 ? (
+            {isCollapsed ? null : items.length === 0 ? (
               <p className="p-4 text-sm text-muted-foreground">Sin entregables este mes todavía.</p>
             ) : (
               <div className="divide-y">
-                {items.map((item) => (
+                {items.map((item) => {
+                  const TipoIcon = TIPO_BADGE[item.tipo].icon;
+                  return (
                   <div
                     key={item.id}
                     className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-muted/30"
                   >
+                    <span
+                      className={cn(
+                        "flex size-6 shrink-0 items-center justify-center rounded-md",
+                        TIPO_BADGE[item.tipo].className
+                      )}
+                      title={item.tipo === "VIDEO" ? "Video" : "Diseño"}
+                    >
+                      <TipoIcon className="size-3.5" />
+                    </span>
+
                     {item.archivoUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element -- imagen externa (R2)
                       <img src={item.archivoUrl} alt="" className="size-8 shrink-0 rounded object-cover" />
@@ -196,7 +305,8 @@ export function DeliverablesTable({ deliverables, clients, anio, mes, bankAccoun
                       <Trash2Icon className="size-4" />
                     </button>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

@@ -115,6 +115,10 @@ model Client {
   fechaContratacion DateTime      @default(now())
   estatusPago      PaymentStatus @default(PENDIENTE)
   activo           Boolean       @default(true)
+  // Color distintivo para identificar de un vistazo las tarjetas de este
+  // cliente en el tablero Kanban; lo elige el usuario al crear/editar el
+  // cliente, no se calcula automáticamente.
+  colorHex         String        @default("#3b82f6")
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 

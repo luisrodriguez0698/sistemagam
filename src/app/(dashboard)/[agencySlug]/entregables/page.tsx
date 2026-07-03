@@ -22,7 +22,7 @@ export default async function EntregablesPage({ searchParams }: EntregablesPageP
       where: { agencyId, anio: year, mes: month },
       orderBy: { orden: "asc" },
       include: {
-        client: { select: { nombreNegocio: true } },
+        client: { select: { nombreNegocio: true, colorHex: true } },
         _count: { select: { transactions: true } },
       },
     }),
@@ -47,6 +47,7 @@ export default async function EntregablesPage({ searchParams }: EntregablesPageP
     fechaEntrega: d.fechaEntrega?.toISOString() ?? null,
     clientId: d.clientId,
     clienteNombre: d.client.nombreNegocio,
+    clienteColor: d.client.colorHex,
     linkEjemplo: d.linkEjemplo,
     archivoUrl: d.archivoUrl,
     copy: d.copy,
@@ -61,6 +62,7 @@ export default async function EntregablesPage({ searchParams }: EntregablesPageP
   const clientQuotas: ClientQuota[] = clients.map((c) => ({
     id: c.id,
     nombreNegocio: c.nombreNegocio,
+    colorHex: c.colorHex,
     videosMensuales: c.deliverableConfig.find((cfg) => cfg.tipo === "VIDEO")?.cantidadMensual ?? 0,
     disenosMensuales: c.deliverableConfig.find((cfg) => cfg.tipo === "DISENO")?.cantidadMensual ?? 0,
   }));

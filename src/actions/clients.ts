@@ -22,6 +22,10 @@ const clientSchema = z.object({
   // en junio → debe junio y julio, nunca antes).
   fechaContratacion: z.coerce.date(),
   categoryId: z.string().min(1).optional(),
+  colorHex: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional(),
   ...deliverableConfigSchema.shape,
 });
 
@@ -65,6 +69,7 @@ export async function createClient(input: z.infer<typeof clientSchema>) {
         diaCobro: data.diaCobro,
         fechaContratacion: data.fechaContratacion,
         categoryId: data.categoryId || undefined,
+        colorHex: data.colorHex,
       },
     });
 
@@ -97,6 +102,7 @@ export async function updateClient(input: z.infer<typeof updateClientSchema>) {
         diaCobro: data.diaCobro,
         fechaContratacion: data.fechaContratacion,
         categoryId: data.categoryId || null,
+        colorHex: data.colorHex,
       },
     });
     if (result.count === 0) throw new Error("Cliente no encontrado en esta agencia");

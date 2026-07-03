@@ -39,7 +39,12 @@ export default async function AgencyLayout({ children, params }: AgencyLayoutPro
         <DashboardSidebar agencySlug={agencySlug} />
       </aside>
 
-      <div className="flex flex-1 flex-col">
+      {/* min-w-0: sin esto, un hijo ancho (ej. las columnas del tablero
+          Kanban) puede forzar a este contenedor a crecer más allá del
+          viewport en vez de quedarse contenido — el desbordamiento debe
+          resolverlo el scroll horizontal interno del tablero, no empujar
+          toda la página. */}
+      <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b px-4 py-3 sm:px-6">
           <span className="text-sm font-semibold md:hidden">Gestión de Agencias</span>
           <span className="hidden md:block" />
@@ -56,7 +61,7 @@ export default async function AgencyLayout({ children, params }: AgencyLayoutPro
             <SignOutButton />
           </div>
         </header>
-        <main className="flex-1 p-4 pb-20 sm:p-6 md:pb-6">{children}</main>
+        <main className="min-w-0 flex-1 p-4 pb-20 sm:p-6 md:pb-6">{children}</main>
       </div>
 
       <MobileTabBar agencySlug={agencySlug} />

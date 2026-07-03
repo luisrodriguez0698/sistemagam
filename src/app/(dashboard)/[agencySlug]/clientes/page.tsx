@@ -37,6 +37,7 @@ export default async function ClientesPage() {
     videosMensuales: c.deliverableConfig.find((d) => d.tipo === "VIDEO")?.cantidadMensual ?? 0,
     disenosMensuales: c.deliverableConfig.find((d) => d.tipo === "DISENO")?.cantidadMensual ?? 0,
     saldoPendiente: saldoPorCliente.get(c.id) ?? 0,
+    colorHex: c.colorHex,
   }));
 
   return (

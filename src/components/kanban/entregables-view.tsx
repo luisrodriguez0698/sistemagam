@@ -64,7 +64,7 @@ export function EntregablesView({ year, month, deliverables, clients, bankAccoun
             Nuevo entregable
           </Button>
 
-          <GenerateDeliverablesButton anio={year} mes={month} />
+          <GenerateDeliverablesButton anio={year} mes={month} clients={clients} deliverables={deliverables} />
         </div>
       </div>
 

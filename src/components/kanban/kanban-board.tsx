@@ -17,6 +17,7 @@ import { arrayMove } from "@dnd-kit/sortable";
 import { KanbanColumn } from "./kanban-column";
 import { DeliverableCard } from "./deliverable-card";
 import { DeliverableDrawer } from "./deliverable-drawer";
+import { KanbanFilters } from "./kanban-filters";
 import { moveDeliverable } from "@/actions/deliverables";
 import type { DeliverableStatus, DeliverableType, ExtraPaymentStatus } from "@prisma/client";
 
@@ -29,6 +30,7 @@ export type DeliverableCardData = {
   fechaEntrega?: string | null; // ISO string, serializado desde el Server Component
   clientId: string;
   clienteNombre: string;
+  clienteColor: string;
   linkEjemplo?: string | null;
   archivoUrl?: string | null;
   copy?: string | null;
@@ -80,6 +82,37 @@ export function KanbanBoard({ initialDeliverables, bankAccounts }: KanbanBoardPr
   const [activeCard, setActiveCard] = React.useState<DeliverableCardData | null>(null);
   const [selectedCard, setSelectedCard] = React.useState<DeliverableCardData | null>(null);
   const [drawerOpen, setDrawerOpen] = React.useState(false);
+  const [tipoFilter, setTipoFilter] = React.useState<DeliverableType | "ALL">("ALL");
+
+  const clientOptions = React.useMemo(() => {
+    const seen = new Map<string, { id: string; nombreNegocio: string; colorHex: string }>();
+    for (const d of initialDeliverables) {
+      if (!seen.has(d.clientId)) {
+        seen.set(d.clientId, { id: d.clientId, nombreNegocio: d.clienteNombre, colorHex: d.clienteColor });
+      }
+    }
+    return [...seen.values()].sort((a, b) => a.nombreNegocio.localeCompare(b.nombreNegocio));
+  }, [initialDeliverables]);
+
+  const [selectedClientIds, setSelectedClientIds] = React.useState<Set<string>>(
+    () => new Set(clientOptions.map((c) => c.id))
+  );
+
+  function toggleClient(clientId: string) {
+    setSelectedClientIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(clientId)) next.delete(clientId);
+      else next.add(clientId);
+      return next;
+    });
+  }
+
+  function isCardVisible(deliverable: DeliverableCardData) {
+    return (
+      selectedClientIds.has(deliverable.clientId) &&
+      (tipoFilter === "ALL" || deliverable.tipo === tipoFilter)
+    );
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
@@ -188,6 +221,18 @@ export function KanbanBoard({ initialDeliverables, bankAccounts }: KanbanBoardPr
 
   return (
     <>
+      <div className="mb-3">
+        <KanbanFilters
+          clients={clientOptions}
+          selectedClientIds={selectedClientIds}
+          onToggleClient={toggleClient}
+          onSelectAllClients={() => setSelectedClientIds(new Set(clientOptions.map((c) => c.id)))}
+          onSelectNoClients={() => setSelectedClientIds(new Set())}
+          tipoFilter={tipoFilter}
+          onTipoFilterChange={setTipoFilter}
+        />
+      </div>
+
       <DndContext
         id="kanban-entregables"
         sensors={sensors}
@@ -195,7 +240,11 @@ export function KanbanBoard({ initialDeliverables, bankAccounts }: KanbanBoardPr
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4">
+          {/* En móvil cada columna ocupa ~82vw (una a la vista, con peek de
+              la siguiente) para que el swipe horizontal se sienta como un
+              carrusel; en sm+ vuelve al ancho fijo original de varias
+              columnas visibles a la vez. */}
           {COLUMNS.map((column) => (
             <KanbanColumn
               key={column.id}
@@ -204,6 +253,7 @@ export function KanbanBoard({ initialDeliverables, bankAccounts }: KanbanBoardPr
               accentClassName={column.accentClassName}
               items={columns[column.id]}
               onCardClick={handleCardClick}
+              isVisible={isCardVisible}
             />
           ))}
         </div>

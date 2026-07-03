@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -60,71 +61,84 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4 py-10">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="space-y-1 text-center">
-          <h1 className="text-xl font-semibold">Crea tu agencia</h1>
-          <p className="text-sm text-muted-foreground">
-            Registra tu agencia y tu cuenta de administrador
-          </p>
-        </div>
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
+      <div
+        className="pointer-events-none absolute left-1/2 top-1/4 size-[32rem] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl"
+        aria-hidden
+      />
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="agencyName">Nombre de la agencia</Label>
-            <Input id="agencyName" value={agencyName} onChange={(e) => setAgencyName(e.target.value)} required />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="adminName">Tu nombre</Label>
-            <Input id="adminName" value={adminName} onChange={(e) => setAdminName(e.target.value)} required />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="password">Contraseña</Label>
-            <PasswordInput
-              id="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-            {password.length > 0 && <PasswordStrengthList password={password} />}
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="confirmPassword">Confirmar contraseña</Label>
-            <PasswordInput
-              id="confirmPassword"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              aria-invalid={!passwordsMatch}
-            />
-            {!passwordsMatch && <p className="text-xs text-destructive">Las contraseñas no coinciden</p>}
-          </div>
-
-          {error && <p className="text-sm text-destructive">{error}</p>}
-
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={isPending || !isPasswordValid || password !== confirmPassword}
-          >
-            {isPending ? "Creando agencia..." : "Crear agencia"}
-          </Button>
-        </form>
-
-        <p className="text-center text-sm text-muted-foreground">
-          ¿Ya tienes una cuenta?{" "}
-          <Link href="/login" className="font-medium text-foreground underline underline-offset-4">
-            Inicia sesión
-          </Link>
+      <div className="relative w-full max-w-sm space-y-6">
+        <p className="text-center text-sm font-semibold tracking-tight text-muted-foreground">
+          Gestión de Agencias
         </p>
+
+        <Card>
+          <CardHeader className="text-center">
+            <CardTitle>Crea tu agencia</CardTitle>
+            <CardDescription>Registra tu agencia y tu cuenta de administrador</CardDescription>
+          </CardHeader>
+
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="agencyName">Nombre de la agencia</Label>
+                <Input id="agencyName" value={agencyName} onChange={(e) => setAgencyName(e.target.value)} required />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="adminName">Tu nombre</Label>
+                <Input id="adminName" value={adminName} onChange={(e) => setAdminName(e.target.value)} required />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="email">Email</Label>
+                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="password">Contraseña</Label>
+                <PasswordInput
+                  id="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+                {password.length > 0 && <PasswordStrengthList password={password} />}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="confirmPassword">Confirmar contraseña</Label>
+                <PasswordInput
+                  id="confirmPassword"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  aria-invalid={!passwordsMatch}
+                />
+                {!passwordsMatch && <p className="text-xs text-destructive">Las contraseñas no coinciden</p>}
+              </div>
+
+              {error && <p className="text-sm text-destructive">{error}</p>}
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={isPending || !isPasswordValid || password !== confirmPassword}
+              >
+                {isPending ? "Creando agencia..." : "Crear agencia"}
+              </Button>
+            </form>
+          </CardContent>
+
+          <CardFooter className="justify-center">
+            <p className="text-center text-sm text-muted-foreground">
+              ¿Ya tienes una cuenta?{" "}
+              <Link href="/login" className="font-medium text-foreground underline underline-offset-4">
+                Inicia sesión
+              </Link>
+            </p>
+          </CardFooter>
+        </Card>
       </div>
     </div>
   );

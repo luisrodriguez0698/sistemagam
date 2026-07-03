@@ -4,6 +4,7 @@ import * as React from "react";
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { PlusIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { AppDrawer } from "@/components/ui/app-drawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +22,26 @@ import type { ClientCardData } from "./client-list";
 function todayInputValue() {
   return new Date().toISOString().slice(0, 10);
 }
+
+// Paleta curada de colores bien distinguibles entre sí (incluso en modo
+// oscuro) para identificar de un vistazo las tarjetas de cada cliente en
+// el Kanban. El usuario elige uno al crear/editar el cliente.
+const COLOR_PALETTE = [
+  "#ef4444",
+  "#f97316",
+  "#f59e0b",
+  "#84cc16",
+  "#22c55e",
+  "#10b981",
+  "#14b8a6",
+  "#06b6d4",
+  "#3b82f6",
+  "#6366f1",
+  "#8b5cf6",
+  "#a855f7",
+  "#ec4899",
+  "#f43f5e",
+];
 
 interface CategoryOption {
   id: string;
@@ -49,6 +70,7 @@ export function ClientDrawer({ open, onOpenChange, client, categories }: ClientD
   const [categoryId, setCategoryId] = React.useState("");
   const [videosMensuales, setVideosMensuales] = React.useState("4");
   const [disenosMensuales, setDisenosMensuales] = React.useState("4");
+  const [colorHex, setColorHex] = React.useState(COLOR_PALETTE[0]);
 
   const [creatingCategory, setCreatingCategory] = React.useState(false);
   const [newCategoryName, setNewCategoryName] = React.useState("");
@@ -67,6 +89,7 @@ export function ClientDrawer({ open, onOpenChange, client, categories }: ClientD
       setCategoryId(client.categoryId ?? "");
       setVideosMensuales(String(client.videosMensuales));
       setDisenosMensuales(String(client.disenosMensuales));
+      setColorHex(client.colorHex);
     } else {
       setNombreNegocio("");
       setContacto("");
@@ -78,6 +101,7 @@ export function ClientDrawer({ open, onOpenChange, client, categories }: ClientD
       setCategoryId("");
       setVideosMensuales("4");
       setDisenosMensuales("4");
+      setColorHex(COLOR_PALETTE[Math.floor(Math.random() * COLOR_PALETTE.length)]);
     }
     setCreatingCategory(false);
     setNewCategoryName("");
@@ -110,6 +134,7 @@ export function ClientDrawer({ open, onOpenChange, client, categories }: ClientD
           categoryId: categoryId || undefined,
           videosMensuales: Number(videosMensuales),
           disenosMensuales: Number(disenosMensuales),
+          colorHex,
         };
 
         if (isEditing) {
@@ -197,6 +222,28 @@ export function ClientDrawer({ open, onOpenChange, client, categories }: ClientD
               </Button>
             </div>
           )}
+        </div>
+
+        <div className="space-y-1.5">
+          <Label>Color en el tablero</Label>
+          <div className="flex flex-wrap gap-2">
+            {COLOR_PALETTE.map((hex) => (
+              <button
+                key={hex}
+                type="button"
+                onClick={() => setColorHex(hex)}
+                aria-label={`Color ${hex}`}
+                className={cn(
+                  "size-7 rounded-full ring-offset-2 ring-offset-background transition-transform hover:scale-110",
+                  colorHex === hex && "ring-2 ring-foreground"
+                )}
+                style={{ backgroundColor: hex }}
+              />
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Ayuda a identificar de un vistazo sus tarjetas en el tablero de entregables.
+          </p>
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

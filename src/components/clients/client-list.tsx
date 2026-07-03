@@ -24,6 +24,7 @@ export type ClientCardData = {
   videosMensuales: number;
   disenosMensuales: number;
   saldoPendiente: number;
+  colorHex: string;
 };
 
 interface ClientListProps {

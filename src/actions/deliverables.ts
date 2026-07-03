@@ -231,6 +231,10 @@ export async function createDeliverable(input: z.infer<typeof createDeliverableS
 const generateMonthlySchema = z.object({
   anio: z.coerce.number().int().min(2000).max(2100),
   mes: z.coerce.number().int().min(1).max(12),
+  // Si se omite, genera para todos los clientes activos con cuota
+  // configurada (comportamiento original). Si se manda, restringe la
+  // generación solo a esos clientes — lo usa el Drawer de selección.
+  clientIds: z.array(z.string().min(1)).optional(),
 });
 
 /**
@@ -244,12 +248,17 @@ const generateMonthlySchema = z.object({
 export async function generateMonthlyDeliverables(input?: z.infer<typeof generateMonthlySchema>) {
   const { agencyId } = await getTenantSession();
   const now = new Date();
-  const { anio, mes } = input
+  const { anio, mes, clientIds } = input
     ? generateMonthlySchema.parse(input)
-    : { anio: now.getFullYear(), mes: now.getMonth() + 1 };
+    : { anio: now.getFullYear(), mes: now.getMonth() + 1, clientIds: undefined };
 
   const configs = await prisma.clientDeliverableConfig.findMany({
-    where: { agencyId, cantidadMensual: { gt: 0 }, client: { activo: true } },
+    where: {
+      agencyId,
+      cantidadMensual: { gt: 0 },
+      client: { activo: true },
+      ...(clientIds ? { clientId: { in: clientIds } } : {}),
+    },
     include: { client: { select: { nombreNegocio: true } } },
   });
 

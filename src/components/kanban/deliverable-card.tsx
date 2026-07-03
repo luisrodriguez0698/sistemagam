@@ -4,6 +4,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { CalendarIcon, ImageIcon, VideoIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { TIPO_ACCENT } from "@/lib/deliverable-tipo";
 import type { DeliverableCardData } from "./kanban-board";
 
 interface DeliverableCardProps {
@@ -21,15 +22,17 @@ export function DeliverableCard({ deliverable, onClick }: DeliverableCardProps) 
     transition,
   };
 
+  const tipoAccent = TIPO_ACCENT[deliverable.tipo];
+
   return (
     <div
       ref={setNodeRef}
-      style={style}
+      style={{ ...style, borderLeftColor: tipoAccent.hex }}
       {...attributes}
       {...listeners}
       onClick={onClick}
       className={cn(
-        "cursor-grab space-y-2 rounded-xl border bg-card p-3 text-card-foreground shadow-sm transition-shadow active:cursor-grabbing",
+        "cursor-grab space-y-2 rounded-xl border border-l-4 bg-card p-3 text-card-foreground shadow-sm transition-shadow active:cursor-grabbing",
         "hover:shadow-md",
         isDragging && "opacity-50 shadow-lg"
       )}
@@ -45,7 +48,12 @@ export function DeliverableCard({ deliverable, onClick }: DeliverableCardProps) 
       )}
 
       <div className="flex items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
+            tipoAccent.badgeClassName
+          )}
+        >
           {deliverable.tipo === "VIDEO" ? (
             <VideoIcon className="size-3" />
           ) : (
@@ -61,7 +69,14 @@ export function DeliverableCard({ deliverable, onClick }: DeliverableCardProps) 
       </div>
 
       <p className="text-sm font-medium leading-snug">{deliverable.titulo}</p>
-      <p className="text-xs text-muted-foreground">{deliverable.clienteNombre}</p>
+      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <span
+          className="size-2 shrink-0 rounded-full"
+          style={{ backgroundColor: deliverable.clienteColor }}
+          aria-hidden
+        />
+        {deliverable.clienteNombre}
+      </p>
 
       {deliverable.fechaEntrega && (
         <div className="flex items-center gap-1 text-xs text-muted-foreground">

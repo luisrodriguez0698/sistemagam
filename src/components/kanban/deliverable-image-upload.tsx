@@ -57,6 +57,29 @@ export function DeliverableImageUpload({
     });
   }
 
+  // Referencia siempre actualizada a `upload` (que cierra sobre props como
+  // `deliverableId`/`onUploaded`) para que el listener global de abajo, que
+  // se suscribe una sola vez, nunca quede con una versión vieja.
+  const uploadRef = React.useRef(upload);
+  uploadRef.current = upload;
+
+  // Pegar (Ctrl+V) sin necesidad de darle click antes a la zona de subida:
+  // el navegador solo dispara "paste" sobre el elemento con foco, así que
+  // antes había que pre-seleccionar el div antes de pegar. Escuchando a
+  // nivel de documento mientras el Drawer está abierto, Ctrl+V funciona
+  // desde cualquier parte (siempre que el portapapeles tenga una imagen; si
+  // no la tiene, no hace nada y no interfiere con pegar texto en otros
+  // campos).
+  React.useEffect(() => {
+    function handleGlobalPaste(e: ClipboardEvent) {
+      const item = Array.from(e.clipboardData?.items ?? []).find((i) => i.type.startsWith("image/"));
+      const file = item?.getAsFile();
+      if (file) uploadRef.current(file);
+    }
+    document.addEventListener("paste", handleGlobalPaste);
+    return () => document.removeEventListener("paste", handleGlobalPaste);
+  }, []);
+
   function handleRemove() {
     setError(null);
     startTransition(async () => {
@@ -66,11 +89,27 @@ export function DeliverableImageUpload({
     });
   }
 
-  function handlePaste(e: React.ClipboardEvent<HTMLDivElement>) {
-    const item = Array.from(e.clipboardData.items).find((i) => i.type.startsWith("image/"));
-    const file = item?.getAsFile();
-    if (file) upload(file);
-  }
+  // El lightbox se cierra con un listener global en vez de onClick directo:
+  // el Drawer (vaul/Radix) trata cualquier click fuera de su propio Content
+  // como "outside" — como el portal del lightbox está fuera de ese árbol,
+  // esa detección interna se comía el primer click y el overlay se quedaba
+  // "congelado" hasta un segundo intento. Escuchando nosotros mismos en
+  // document (capture) evitamos por completo esa pelea de capas.
+  React.useEffect(() => {
+    if (!previewOpen) return;
+    function close() {
+      setPreviewOpen(false);
+    }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") close();
+    }
+    document.addEventListener("pointerdown", close, true);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", close, true);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [previewOpen]);
 
   function handleDrop(e: React.DragEvent<HTMLDivElement>) {
     e.preventDefault();
@@ -135,7 +174,6 @@ export function DeliverableImageUpload({
       <p className="text-sm font-medium">Imagen de referencia</p>
       <div
         tabIndex={0}
-        onPaste={handlePaste}
         onDragOver={(e) => {
           e.preventDefault();
           setIsDraggingOver(true);

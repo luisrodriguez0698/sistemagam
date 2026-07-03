@@ -27,7 +27,14 @@ export function ClientCard({ client, onClick }: { client: ClientCardData; onClic
     >
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="font-semibold leading-tight">{client.nombreNegocio}</p>
+          <p className="flex items-center gap-1.5 font-semibold leading-tight">
+            <span
+              className="size-2.5 shrink-0 rounded-full"
+              style={{ backgroundColor: client.colorHex }}
+              aria-hidden
+            />
+            {client.nombreNegocio}
+          </p>
           {client.categoryName && (
             <p className="text-xs text-muted-foreground">{client.categoryName}</p>
           )}
