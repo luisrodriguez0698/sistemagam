@@ -5,6 +5,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { CalendarIcon, ImageIcon, VideoIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TIPO_ACCENT } from "@/lib/deliverable-tipo";
+import { formatDateOnly } from "@/lib/date-only";
 import type { DeliverableCardData } from "./kanban-board";
 
 interface DeliverableCardProps {
@@ -81,9 +82,7 @@ export function DeliverableCard({ deliverable, onClick }: DeliverableCardProps) 
       {deliverable.fechaEntrega && (
         <div className="flex items-center gap-1 text-xs text-muted-foreground">
           <CalendarIcon className="size-3" />
-          {new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "short" }).format(
-            new Date(deliverable.fechaEntrega)
-          )}
+          {formatDateOnly(deliverable.fechaEntrega)}
         </div>
       )}
 

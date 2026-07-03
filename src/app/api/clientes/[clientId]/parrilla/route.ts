@@ -4,6 +4,7 @@ import { es } from "date-fns/locale";
 import { prisma } from "@/lib/prisma";
 import { getTenantSession } from "@/lib/tenant";
 import { renderContentGridPdf, type ContentGridRow } from "@/lib/content-grid-pdf";
+import { formatDateOnly } from "@/lib/date-only";
 
 interface RouteParams {
   params: Promise<{ clientId: string }>;
@@ -41,7 +42,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       numero: tipo === "DISENO" ? `Diseño ${++disenoCounter}` : `Video ${++videoCounter}`,
       titulo: d.titulo,
       descripcion: d.descripcion,
-      fechaEntrega: d.fechaEntrega ? format(d.fechaEntrega, "dd/MM/yyyy") : null,
+      fechaEntrega: d.fechaEntrega
+        ? formatDateOnly(d.fechaEntrega, { day: "2-digit", month: "2-digit", year: "numeric" })
+        : null,
       link: d.linkEjemplo,
     });
 

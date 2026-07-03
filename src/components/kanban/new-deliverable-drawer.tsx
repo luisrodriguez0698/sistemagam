@@ -5,6 +5,7 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AppDrawer } from "@/components/ui/app-drawer";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -150,13 +151,8 @@ export function NewDeliverableDrawer({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="fechaEntrega">Fecha de entrega (opcional)</Label>
-            <Input
-              id="fechaEntrega"
-              type="date"
-              value={fechaEntrega}
-              onChange={(e) => setFechaEntrega(e.target.value)}
-            />
+            <Label>Fecha de entrega (opcional)</Label>
+            <DatePicker value={fechaEntrega} onChange={setFechaEntrega} />
           </div>
         </div>
 

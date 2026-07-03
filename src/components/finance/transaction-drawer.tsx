@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { AppDrawer } from "@/components/ui/app-drawer";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -48,6 +49,14 @@ interface TransactionDrawerProps {
   /** Movimiento a editar; si es null/undefined, el Drawer crea uno nuevo. */
   transaction?: TransactionRow | null;
   onSaved?: () => void;
+  /**
+   * Valores iniciales al CREAR (ignorados si `transaction` está definido) —
+   * los usa "Cuentas por cobrar" para abrir el Drawer ya listo para saldar
+   * un mes específico, sin que el usuario tenga que volver a capturarlo.
+   */
+  defaultClientId?: string;
+  defaultConcepto?: string;
+  defaultMonto?: number;
 }
 
 function todayInputValue() {
@@ -63,6 +72,9 @@ export function TransactionDrawer({
   clientBalances = [],
   transaction,
   onSaved,
+  defaultClientId,
+  defaultConcepto,
+  defaultMonto,
 }: TransactionDrawerProps) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = React.useState<string | null>(null);
@@ -89,14 +101,14 @@ export function TransactionDrawer({
       setClientId(transaction.clientId ?? "");
       setFecha(transaction.fecha.slice(0, 10));
     } else {
-      setConcepto("");
-      setMonto("");
+      setConcepto(defaultConcepto ?? "");
+      setMonto(defaultMonto != null ? String(defaultMonto) : "");
       setBankAccountId("");
       setCategoriaGasto("");
-      setClientId("");
+      setClientId(defaultClientId ?? "");
       setFecha(todayInputValue());
     }
-  }, [open, transaction]);
+  }, [open, transaction, defaultClientId, defaultConcepto, defaultMonto]);
 
   function handleClientChange(newClientId: string) {
     setClientId(newClientId);
@@ -207,8 +219,8 @@ export function TransactionDrawer({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="fecha">Fecha del {isIngreso ? "abono" : "gasto"}</Label>
-            <Input id="fecha" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} required />
+            <Label>Fecha del {isIngreso ? "abono" : "gasto"}</Label>
+            <DatePicker value={fecha} onChange={setFecha} />
           </div>
         </div>
 

@@ -4,6 +4,7 @@ import * as React from "react";
 import { useTransition } from "react";
 import { AppDrawer } from "@/components/ui/app-drawer";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -165,13 +166,8 @@ export function DeliverableDrawer({
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label htmlFor="fechaEntrega">Fecha de entrega</Label>
-            <Input
-              id="fechaEntrega"
-              type="date"
-              value={fechaEntrega}
-              onChange={(e) => setFechaEntrega(e.target.value)}
-            />
+            <Label>Fecha de entrega</Label>
+            <DatePicker value={fechaEntrega} onChange={setFechaEntrega} />
           </div>
 
           <div className="space-y-1.5">

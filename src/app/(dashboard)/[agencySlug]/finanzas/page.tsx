@@ -1,7 +1,7 @@
 import { endOfDay, startOfDay } from "date-fns";
 import { prisma } from "@/lib/prisma";
 import { getTenantSession } from "@/lib/tenant";
-import { ensurePaymentStatusesFresh } from "@/lib/payment-status";
+import { ensurePaymentStatusesFresh, getOutstandingBalances } from "@/lib/payment-status";
 import { FinanceView } from "@/components/finance/finance-view";
 import type { Prisma, TransactionType } from "@prisma/client";
 
@@ -14,6 +14,7 @@ interface FinanzasPageProps {
 export default async function FinanzasPage({ searchParams }: FinanzasPageProps) {
   const { agencyId } = await getTenantSession();
   const billingSummaries = await ensurePaymentStatusesFresh(agencyId);
+  const outstandingBalances = await getOutstandingBalances(agencyId);
 
   const params = await searchParams;
   const page = Math.max(1, Number(params.page) || 1);
@@ -78,6 +79,7 @@ export default async function FinanzasPage({ searchParams }: FinanzasPageProps) 
         mes: s.mes,
         saldoPendiente: s.saldoPendiente,
       }))}
+      outstandingBalances={outstandingBalances}
       pagination={{ page, pageSize: PAGE_SIZE, totalCount }}
       filters={{ from: params.from ?? "", to: params.to ?? "", tipo: params.tipo ?? "" }}
     />

@@ -2,11 +2,15 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
 import { PlusIcon, TrendingDownIcon, TrendingUpIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BankAccountCard, type BankAccountCardData } from "./bank-account-card";
 import { BankAccountDrawer } from "./bank-account-drawer";
 import { TransactionDrawer } from "./transaction-drawer";
+import { OutstandingBalances } from "./outstanding-balances";
+import type { OutstandingBalance } from "@/lib/payment-status";
 import {
   TransactionsTable,
   type PaginationInfo,
@@ -33,6 +37,7 @@ interface FinanceViewProps {
   transactions: TransactionRow[];
   clients: ClientOption[];
   clientBalances: ClientBalance[];
+  outstandingBalances: OutstandingBalance[];
   pagination: PaginationInfo;
   filters: TransactionFilters;
 }
@@ -42,6 +47,7 @@ export function FinanceView({
   transactions,
   clients,
   clientBalances,
+  outstandingBalances,
   pagination,
   filters,
 }: FinanceViewProps) {
@@ -49,6 +55,7 @@ export function FinanceView({
   const [accountDrawerOpen, setAccountDrawerOpen] = React.useState(false);
   const [newTransactionTipo, setNewTransactionTipo] = React.useState<"INGRESO" | "GASTO" | null>(null);
   const [editingTransaction, setEditingTransaction] = React.useState<TransactionRow | null>(null);
+  const [prefill, setPrefill] = React.useState<{ clientId: string; concepto: string; monto: number } | null>(null);
 
   const canAddAccount = bankAccounts.length < MAX_BANK_ACCOUNTS;
   const drawerOpen = !!newTransactionTipo || !!editingTransaction;
@@ -57,6 +64,17 @@ export function FinanceView({
     if (open) return;
     setNewTransactionTipo(null);
     setEditingTransaction(null);
+    setPrefill(null);
+  }
+
+  function handleRegisterOutstanding(balance: OutstandingBalance) {
+    const monthLabel = format(new Date(balance.anio, balance.mes - 1, 1), "MMMM", { locale: es });
+    setPrefill({
+      clientId: balance.clientId,
+      concepto: `Mensualidad ${monthLabel}`,
+      monto: balance.saldoPendiente,
+    });
+    setNewTransactionTipo("INGRESO");
   }
 
   return (
@@ -104,6 +122,11 @@ export function FinanceView({
         />
       </div>
 
+      <div>
+        <h2 className="mb-2 text-sm font-semibold">Cuentas por cobrar</h2>
+        <OutstandingBalances balances={outstandingBalances} onRegisterPayment={handleRegisterOutstanding} />
+      </div>
+
       <BankAccountDrawer open={accountDrawerOpen} onOpenChange={setAccountDrawerOpen} />
 
       {drawerOpen && (
@@ -115,6 +138,9 @@ export function FinanceView({
           bankAccounts={bankAccounts}
           clients={clients}
           clientBalances={clientBalances}
+          defaultClientId={prefill?.clientId}
+          defaultConcepto={prefill?.concepto}
+          defaultMonto={prefill?.monto}
           onSaved={() => router.refresh()}
         />
       )}

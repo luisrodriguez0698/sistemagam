@@ -14,6 +14,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
+import { cn } from "@/lib/utils";
 import { KanbanColumn } from "./kanban-column";
 import { DeliverableCard } from "./deliverable-card";
 import { DeliverableDrawer } from "./deliverable-drawer";
@@ -75,6 +76,32 @@ const collisionDetectionStrategy: CollisionDetection = (args) => {
   return pointerCollisions.length > 0 ? pointerCollisions : rectIntersection(args);
 };
 
+type SortMode = "MANUAL" | "NOMBRE" | "TIPO";
+
+const SORT_OPTIONS: { value: SortMode; label: string }[] = [
+  { value: "MANUAL", label: "Manual" },
+  { value: "NOMBRE", label: "Nombre" },
+  { value: "TIPO", label: "Tipo" },
+];
+
+// Ordena cada columna de forma independiente (nunca mezcla tarjetas entre
+// estatus distintos, cada arreglo ya viene separado por columna). En modo
+// "MANUAL" respeta el orden de arrastre (`orden`); los otros dos son un
+// orden de SOLO VISTA que se recalcula en cada render.
+function sortItems(items: DeliverableCardData[], mode: SortMode): DeliverableCardData[] {
+  if (mode === "MANUAL") return items;
+  const sorted = [...items];
+  if (mode === "NOMBRE") {
+    sorted.sort((a, b) => a.titulo.localeCompare(b.titulo, "es"));
+  } else {
+    sorted.sort((a, b) => {
+      if (a.tipo !== b.tipo) return a.tipo === "VIDEO" ? -1 : 1;
+      return a.titulo.localeCompare(b.titulo, "es");
+    });
+  }
+  return sorted;
+}
+
 export function KanbanBoard({ initialDeliverables, bankAccounts }: KanbanBoardProps) {
   const [columns, setColumns] = React.useState<Record<DeliverableStatus, DeliverableCardData[]>>(
     () => groupByStatus(initialDeliverables)
@@ -83,6 +110,7 @@ export function KanbanBoard({ initialDeliverables, bankAccounts }: KanbanBoardPr
   const [selectedCard, setSelectedCard] = React.useState<DeliverableCardData | null>(null);
   const [drawerOpen, setDrawerOpen] = React.useState(false);
   const [tipoFilter, setTipoFilter] = React.useState<DeliverableType | "ALL">("ALL");
+  const [sortMode, setSortMode] = React.useState<SortMode>("MANUAL");
 
   const clientOptions = React.useMemo(() => {
     const seen = new Map<string, { id: string; nombreNegocio: string; colorHex: string }>();
@@ -157,6 +185,12 @@ export function KanbanBoard({ initialDeliverables, bankAccounts }: KanbanBoardPr
     const card = sourceItems.find((c) => c.id === activeId);
     if (!card) return;
 
+    // Con un orden automático (Nombre/Tipo) activo, reacomodar dentro de la
+    // MISMA columna no tendría efecto visible — se resuelve solo al volver
+    // a ordenar en el próximo render — así que ese caso se ignora. Mover
+    // entre columnas (cambiar de estatus) sigue funcionando siempre.
+    if (fromStatus === toStatus && sortMode !== "MANUAL") return;
+
     let reorderedTarget: DeliverableCardData[];
 
     if (fromStatus === toStatus) {
@@ -221,7 +255,7 @@ export function KanbanBoard({ initialDeliverables, bankAccounts }: KanbanBoardPr
 
   return (
     <>
-      <div className="mb-3">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <KanbanFilters
           clients={clientOptions}
           selectedClientIds={selectedClientIds}
@@ -231,6 +265,26 @@ export function KanbanBoard({ initialDeliverables, bankAccounts }: KanbanBoardPr
           tipoFilter={tipoFilter}
           onTipoFilterChange={setTipoFilter}
         />
+
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">Ordenar:</span>
+          <div className="flex rounded-lg border p-0.5">
+            {SORT_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setSortMode(opt.value)}
+                className={cn(
+                  "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                  sortMode === opt.value
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-muted"
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       <DndContext
@@ -251,7 +305,7 @@ export function KanbanBoard({ initialDeliverables, bankAccounts }: KanbanBoardPr
               id={column.id}
               title={column.title}
               accentClassName={column.accentClassName}
-              items={columns[column.id]}
+              items={sortItems(columns[column.id], sortMode)}
               onCardClick={handleCardClick}
               isVisible={isCardVisible}
             />

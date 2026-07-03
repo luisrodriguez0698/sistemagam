@@ -101,3 +101,49 @@ export const ensurePaymentStatusesFresh = cache(async (agencyId: string): Promis
 
   return summaries;
 });
+
+export interface OutstandingBalance {
+  clientId: string;
+  nombreNegocio: string;
+  anio: number;
+  mes: number;
+  montoEsperado: number;
+  montoPagado: number;
+  saldoPendiente: number;
+}
+
+/**
+ * A diferencia de `ensurePaymentStatusesFresh` (que solo mira el mes en
+ * curso), esto recorre TODOS los cargos (`ClientBilling`) históricos y
+ * regresa únicamente los que todavía tienen saldo pendiente — para poder
+ * ver de un vistazo quién debe cuánto y de qué mes, no solo el estatus del
+ * mes actual (un cliente puede estar "al día" en julio pero seguir
+ * debiendo junio, y eso no lo refleja `Client.estatusPago`).
+ */
+export async function getOutstandingBalances(agencyId: string): Promise<OutstandingBalance[]> {
+  const billings = await prisma.clientBilling.findMany({
+    where: { agencyId, client: { activo: true } },
+    include: {
+      transactions: { select: { monto: true } },
+      client: { select: { nombreNegocio: true } },
+    },
+    orderBy: [{ anio: "asc" }, { mes: "asc" }],
+  });
+
+  return billings
+    .map((b) => {
+      const montoPagado = b.transactions.reduce((sum, t) => sum + Number(t.monto), 0);
+      const montoEsperado = Number(b.montoEsperado);
+      const saldoPendiente = Math.max(montoEsperado - montoPagado, 0);
+      return {
+        clientId: b.clientId,
+        nombreNegocio: b.client.nombreNegocio,
+        anio: b.anio,
+        mes: b.mes,
+        montoEsperado,
+        montoPagado,
+        saldoPendiente,
+      };
+    })
+    .filter((b) => b.saldoPendiente > 0);
+}

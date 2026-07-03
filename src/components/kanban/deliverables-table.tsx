@@ -21,6 +21,7 @@ import { DeliverableDrawer } from "./deliverable-drawer";
 import { NewDeliverableDrawer } from "./new-deliverable-drawer";
 import { KanbanFilters } from "./kanban-filters";
 import { TIPO_ACCENT } from "@/lib/deliverable-tipo";
+import { formatDateOnly } from "@/lib/date-only";
 import type { BankAccountOption, DeliverableCardData } from "./kanban-board";
 import type { DeliverableStatus, DeliverableType } from "@prisma/client";
 
@@ -282,9 +283,7 @@ export function DeliverablesTable({ deliverables, clients, anio, mes, bankAccoun
 
                     {item.fechaEntrega && (
                       <span className="hidden shrink-0 text-xs text-muted-foreground sm:block">
-                        {new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "short" }).format(
-                          new Date(item.fechaEntrega)
-                        )}
+                        {formatDateOnly(item.fechaEntrega)}
                       </span>
                     )}
 
