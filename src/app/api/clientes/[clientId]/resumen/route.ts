@@ -39,7 +39,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     titulo: d.titulo,
     descripcion: d.descripcion,
     imageUrl: d.archivoUrl,
-    link: d.linkEjemplo,
   });
 
   const monthLabel = format(new Date(anio, mes - 1, 1), "MMMM yyyy", { locale: es });

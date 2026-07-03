@@ -1,10 +1,9 @@
-import { Document, Image, Link, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
+import { Document, Image, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
 
 export interface SummaryItem {
   titulo: string;
   descripcion?: string | null;
   imageUrl?: string | null;
-  link?: string | null;
 }
 
 export interface MonthlySummaryData {
@@ -68,7 +67,6 @@ const styles = StyleSheet.create({
   cardBody: { padding: 6 },
   cardTitle: { fontSize: 8.5, fontWeight: 700, color: "#1f2937" },
   cardDescription: { fontSize: 7.5, color: "#6b7280", marginTop: 2 },
-  cardLink: { fontSize: 7.5, color: "#2563eb", marginTop: 3, textDecoration: "underline" },
   emptyText: { fontSize: 9, color: "#9ca3af", fontStyle: "italic" },
   footer: { position: "absolute", bottom: 24, left: 32, right: 32, fontSize: 8, color: "#9ca3af", textAlign: "center" },
 });
@@ -92,11 +90,6 @@ function ItemGrid({ items }: { items: SummaryItem[] }) {
           <View style={styles.cardBody}>
             <Text style={styles.cardTitle}>{item.titulo}</Text>
             {item.descripcion && <Text style={styles.cardDescription}>{item.descripcion}</Text>}
-            {item.link && (
-              <Link src={item.link} style={styles.cardLink}>
-                Ver ejemplo
-              </Link>
-            )}
           </View>
         </View>
       ))}

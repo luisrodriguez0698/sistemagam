@@ -16,10 +16,19 @@ interface EntregablesViewProps {
   deliverables: DeliverableCardData[];
   clients: ClientQuota[];
   bankAccounts: BankAccountOption[];
+  /** Permite deep-linkear directo a la Parrilla, ej. desde un entregable del Calendario. */
+  initialView?: "board" | "table";
 }
 
-export function EntregablesView({ year, month, deliverables, clients, bankAccounts }: EntregablesViewProps) {
-  const [view, setView] = React.useState<"board" | "table">("board");
+export function EntregablesView({
+  year,
+  month,
+  deliverables,
+  clients,
+  bankAccounts,
+  initialView = "board",
+}: EntregablesViewProps) {
+  const [view, setView] = React.useState<"board" | "table">(initialView);
   const [newDrawerOpen, setNewDrawerOpen] = React.useState(false);
 
   // Fuerza a KanbanBoard a reinicializar su estado interno cuando cambian

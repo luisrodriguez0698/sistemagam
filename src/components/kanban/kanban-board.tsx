@@ -4,7 +4,8 @@ import * as React from "react";
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   pointerWithin,
   rectIntersection,
   useSensor,
@@ -142,8 +143,17 @@ export function KanbanBoard({ initialDeliverables, bankAccounts }: KanbanBoardPr
     );
   }
 
+  // Sensores separados por tipo de entrada: con mouse, 6px de movimiento ya
+  // activa el arrastre (es preciso, no hay ambigüedad con hacer scroll).
+  // Con el dedo, un swipe rápido para deslizar entre columnas también mueve
+  // más de 6px desde el primer instante, así que se confundía con querer
+  // arrastrar la tarjeta. TouchSensor en cambio exige mantener presionado
+  // ~250ms antes de arrancar el arrastre — un swipe normal dura menos que
+  // eso y nunca lo activa, dejando el scroll libre; `tolerance` permite que
+  // el dedo tiemble un poco durante esa espera sin cancelarla.
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } })
   );
 
   function findColumnOf(id: string): DeliverableStatus | undefined {

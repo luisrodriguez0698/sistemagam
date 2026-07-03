@@ -5,12 +5,12 @@ import type { BankAccountOption, DeliverableCardData } from "@/components/kanban
 import type { ClientQuota } from "@/components/kanban/deliverables-table";
 
 interface EntregablesPageProps {
-  searchParams: Promise<{ month?: string }>; // formato YYYY-MM
+  searchParams: Promise<{ month?: string; view?: string }>; // formato YYYY-MM
 }
 
 export default async function EntregablesPage({ searchParams }: EntregablesPageProps) {
   const { agencyId } = await getTenantSession();
-  const { month: monthParam } = await searchParams;
+  const { month: monthParam, view } = await searchParams;
 
   const now = new Date();
   const [year, month] = (monthParam ?? `${now.getFullYear()}-${now.getMonth() + 1}`)
@@ -86,6 +86,7 @@ export default async function EntregablesPage({ searchParams }: EntregablesPageP
         deliverables={cards}
         clients={clientQuotas}
         bankAccounts={bankAccountOptions}
+        initialView={view === "table" ? "table" : "board"}
       />
     </div>
   );

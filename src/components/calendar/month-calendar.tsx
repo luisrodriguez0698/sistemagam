@@ -15,11 +15,13 @@ import {
   startOfWeek,
 } from "date-fns";
 import { es } from "date-fns/locale";
-import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon, ImageIcon, VideoIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { TIPO_ACCENT } from "@/lib/deliverable-tipo";
 import { EventDrawer } from "./event-drawer";
-import type { EventType } from "@prisma/client";
+import { DayDeliverablesDrawer } from "./day-deliverables-drawer";
+import type { DeliverableStatus, DeliverableType, EventType } from "@prisma/client";
 
 export type CalendarEventData = {
   id: string;
@@ -30,6 +32,16 @@ export type CalendarEventData = {
   notas?: string | null;
   clientId?: string | null;
   clienteNombre?: string | null;
+};
+
+export type CalendarDeliverableData = {
+  id: string;
+  titulo: string;
+  tipo: DeliverableType;
+  estado: DeliverableStatus;
+  fechaEntrega: string; // ISO
+  clientId: string;
+  clienteNombre: string;
 };
 
 const TYPE_DOT: Record<EventType, string> = {
@@ -43,16 +55,21 @@ interface MonthCalendarProps {
   year: number;
   month: number; // 1-indexed
   events: CalendarEventData[];
+  deliverables: CalendarDeliverableData[];
   clients: { id: string; nombreNegocio: string }[];
 }
 
-export function MonthCalendar({ year, month, events, clients }: MonthCalendarProps) {
+export function MonthCalendar({ year, month, events, deliverables, clients }: MonthCalendarProps) {
   const router = useRouter();
   const pathname = usePathname();
 
   const [drawerOpen, setDrawerOpen] = React.useState(false);
   const [selectedEvent, setSelectedEvent] = React.useState<CalendarEventData | null>(null);
   const [selectedDate, setSelectedDate] = React.useState<Date | undefined>(undefined);
+
+  const [deliverablesDrawerOpen, setDeliverablesDrawerOpen] = React.useState(false);
+  const [selectedDayDeliverables, setSelectedDayDeliverables] = React.useState<CalendarDeliverableData[]>([]);
+  const [selectedDeliverablesDate, setSelectedDeliverablesDate] = React.useState<Date | undefined>(undefined);
 
   const monthStart = startOfMonth(new Date(year, month - 1, 1));
   const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
@@ -74,6 +91,23 @@ export function MonthCalendar({ year, month, events, clients }: MonthCalendarPro
     setSelectedEvent(event);
     setSelectedDate(undefined);
     setDrawerOpen(true);
+  }
+
+  function openDayDeliverables(day: Date, dayDeliverables: CalendarDeliverableData[], e: React.MouseEvent) {
+    e.stopPropagation();
+    setSelectedDeliverablesDate(day);
+    setSelectedDayDeliverables(dayDeliverables);
+    setDeliverablesDrawerOpen(true);
+  }
+
+  // `fechaEntrega` se guarda como medianoche UTC (ver src/lib/date-only.ts):
+  // comparar con `isSameDay` de date-fns (que usa hora LOCAL) correría el
+  // día en husos horarios detrás de UTC. En vez de eso se comparan
+  // directamente los componentes Y-M-D del string ISO, sin pasar por un
+  // Date que reintroduzca la conversión de huso horario.
+  function isSameCalendarDayUTC(isoString: string, day: Date): boolean {
+    const [y, m, d] = isoString.slice(0, 10).split("-").map(Number);
+    return day.getFullYear() === y && day.getMonth() === m - 1 && day.getDate() === d;
   }
 
   return (
@@ -103,6 +137,7 @@ export function MonthCalendar({ year, month, events, clients }: MonthCalendarPro
       <div className="grid grid-cols-7 gap-px overflow-hidden rounded-xl border bg-border">
         {days.map((day) => {
           const dayEvents = events.filter((ev) => isSameDay(new Date(ev.fechaInicio), day));
+          const dayDeliverables = deliverables.filter((d) => isSameCalendarDayUTC(d.fechaEntrega, day));
           const outsideMonth = !isSameMonth(day, monthStart);
 
           return (
@@ -140,6 +175,32 @@ export function MonthCalendar({ year, month, events, clients }: MonthCalendarPro
                     +{dayEvents.length - 3} más
                   </span>
                 )}
+
+                {dayDeliverables.slice(0, 2).map((d) => (
+                  <div
+                    key={d.id}
+                    onClick={(e) => openDayDeliverables(day, dayDeliverables, e)}
+                    className={cn(
+                      "flex items-center gap-1 truncate rounded-md px-1.5 py-0.5 text-[11px] hover:opacity-80",
+                      TIPO_ACCENT[d.tipo].badgeClassName
+                    )}
+                  >
+                    {d.tipo === "VIDEO" ? (
+                      <VideoIcon className="size-2.5 shrink-0" />
+                    ) : (
+                      <ImageIcon className="size-2.5 shrink-0" />
+                    )}
+                    <span className="truncate">{d.titulo}</span>
+                  </div>
+                ))}
+                {dayDeliverables.length > 2 && (
+                  <span
+                    onClick={(e) => openDayDeliverables(day, dayDeliverables, e)}
+                    className="cursor-pointer px-1.5 text-[11px] text-muted-foreground hover:underline"
+                  >
+                    +{dayDeliverables.length - 2} entregable{dayDeliverables.length - 2 === 1 ? "" : "s"}
+                  </span>
+                )}
               </div>
             </button>
           );
@@ -153,6 +214,13 @@ export function MonthCalendar({ year, month, events, clients }: MonthCalendarPro
         defaultDate={selectedDate}
         clients={clients}
         onSaved={() => router.refresh()}
+      />
+
+      <DayDeliverablesDrawer
+        open={deliverablesDrawerOpen}
+        onOpenChange={setDeliverablesDrawerOpen}
+        date={selectedDeliverablesDate}
+        deliverables={selectedDayDeliverables}
       />
     </div>
   );
