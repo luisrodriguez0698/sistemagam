@@ -51,6 +51,7 @@ export default async function EntregablesPage({ searchParams }: EntregablesPageP
     linkEjemplo: d.linkEjemplo,
     archivoUrl: d.archivoUrl,
     copy: d.copy,
+    guion: d.guion,
     orden: d.orden,
     esExtra: d.esExtra,
     montoExtra: d.montoExtra ? Number(d.montoExtra) : null,

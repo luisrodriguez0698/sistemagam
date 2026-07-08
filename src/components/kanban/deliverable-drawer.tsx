@@ -59,6 +59,7 @@ export function DeliverableDrawer({
   const [bankAccountId, setBankAccountId] = React.useState("");
   const [linkEjemplo, setLinkEjemplo] = React.useState("");
   const [copy, setCopy] = React.useState("");
+  const [guion, setGuion] = React.useState("");
   const [copied, setCopied] = React.useState(false);
 
   function handleCopyToClipboard() {
@@ -79,6 +80,7 @@ export function DeliverableDrawer({
     setEstatusPagoExtra(deliverable.estatusPagoExtra ?? "PENDIENTE");
     setLinkEjemplo(deliverable.linkEjemplo ?? "");
     setCopy(deliverable.copy ?? "");
+    setGuion(deliverable.guion ?? "");
     setBankAccountId("");
     setError(null);
   }, [deliverable]);
@@ -109,6 +111,7 @@ export function DeliverableDrawer({
           fechaEntrega: fechaEntrega ? new Date(fechaEntrega) : undefined,
           linkEjemplo: linkEjemplo || undefined,
           copy: copy || undefined,
+          guion: deliverable!.tipo === "VIDEO" ? guion || undefined : undefined,
           estado,
           montoExtra: deliverable!.esExtra ? Number(montoExtra) : undefined,
           estatusPagoExtra: deliverable!.esExtra ? estatusPagoExtra : undefined,
@@ -121,6 +124,7 @@ export function DeliverableDrawer({
           fechaEntrega,
           linkEjemplo,
           copy,
+          guion,
           estado,
           montoExtra: deliverable!.esExtra ? Number(montoExtra) : deliverable!.montoExtra,
           estatusPagoExtra: deliverable!.esExtra ? estatusPagoExtra : deliverable!.estatusPagoExtra,
@@ -234,6 +238,22 @@ export function DeliverableDrawer({
             Solo se ve aquí adentro — nunca se incluye en la parrilla ni en el resumen descargable.
           </p>
         </div>
+
+        {deliverable.tipo === "VIDEO" && (
+          <div className="space-y-1.5">
+            <Label htmlFor="guion">Guion del video</Label>
+            <Textarea
+              id="guion"
+              value={guion}
+              onChange={(e) => setGuion(e.target.value)}
+              rows={10}
+              placeholder="Gancho, contenido, cierre y CTA..."
+            />
+            <p className="text-xs text-muted-foreground">
+              Se descarga aparte en el PDF de "Guion" — nunca en la parrilla ni en el resumen.
+            </p>
+          </div>
+        )}
 
         <DeliverableImageUpload
           deliverableId={deliverable.id}

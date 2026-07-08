@@ -18,6 +18,7 @@ import { useConfirm } from "@/components/confirm-provider";
 import { deleteDeliverable } from "@/actions/deliverables";
 import { DeliverableDrawer } from "./deliverable-drawer";
 import { NewDeliverableDrawer } from "./new-deliverable-drawer";
+import { ExportDrawer } from "./export-drawer";
 import { KanbanFilters } from "./kanban-filters";
 import { TIPO_ACCENT, TIPO_ICON, TIPO_LABEL } from "@/lib/deliverable-tipo";
 import { formatDateOnly } from "@/lib/date-only";
@@ -67,6 +68,7 @@ export function DeliverablesTable({ deliverables, clients, anio, mes, bankAccoun
     () => new Set(clients.map((c) => c.id))
   );
   const [collapsedClientIds, setCollapsedClientIds] = React.useState<Set<string>>(() => new Set());
+  const [exportDrawerClient, setExportDrawerClient] = React.useState<ClientQuota | null>(null);
 
   const byClient = new Map<string, DeliverableCardData[]>();
   for (const d of deliverables) {
@@ -182,17 +184,14 @@ export function DeliverablesTable({ deliverables, clients, anio, mes, bankAccoun
                 </div>
               </button>
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" className="gap-1" asChild>
-                  <a href={`/api/clientes/${client.id}/parrilla?anio=${anio}&mes=${mes}`} target="_blank" rel="noreferrer">
-                    <DownloadIcon className="size-4" />
-                    Descargar parrilla
-                  </a>
-                </Button>
-                <Button size="sm" variant="outline" className="gap-1" asChild>
-                  <a href={`/api/clientes/${client.id}/resumen?anio=${anio}&mes=${mes}`} target="_blank" rel="noreferrer">
-                    <DownloadIcon className="size-4" />
-                    Descargar resumen
-                  </a>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1"
+                  onClick={() => setExportDrawerClient(client)}
+                >
+                  <DownloadIcon className="size-4" />
+                  Descargar
                 </Button>
                 <Button size="sm" variant="outline" className="gap-1" onClick={() => openNew(client.id)}>
                   <PlusIcon className="size-4" />
@@ -329,6 +328,16 @@ export function DeliverablesTable({ deliverables, clients, anio, mes, bankAccoun
         anio={anio}
         mes={mes}
         bankAccounts={bankAccounts}
+      />
+
+      <ExportDrawer
+        open={!!exportDrawerClient}
+        onOpenChange={(nextOpen) => !nextOpen && setExportDrawerClient(null)}
+        clientId={exportDrawerClient?.id ?? ""}
+        clienteNombre={exportDrawerClient?.nombreNegocio ?? ""}
+        anio={anio}
+        mes={mes}
+        deliverables={exportDrawerClient ? byClient.get(exportDrawerClient.id) ?? [] : []}
       />
     </div>
   );

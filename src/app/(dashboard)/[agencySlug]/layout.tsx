@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { assertTenantMatchesSlug } from "@/lib/tenant";
-import { ensurePaymentStatusesFresh } from "@/lib/payment-status";
+import { ensurePaymentStatusesFresh, getOutstandingBalances } from "@/lib/payment-status";
 import { prisma } from "@/lib/prisma";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { DashboardSidebar } from "@/components/dashboard-sidebar";
@@ -25,12 +25,19 @@ export default async function AgencyLayout({ children, params }: AgencyLayoutPro
     notFound();
   }
 
+  // `ensurePaymentStatusesFresh` está envuelto en `cache()` de React, así
+  // que aunque otras páginas (Finanzas, Clientes) también lo llamen en el
+  // mismo request, solo se ejecuta una vez — llamarlo aquí de nuevo no
+  // repite trabajo.
   await ensurePaymentStatusesFresh(agencyId);
-  const overdueClients = await prisma.client.findMany({
-    where: { agencyId, activo: true, estatusPago: { in: ["PENDIENTE", "VENCIDO"] } },
-    select: { id: true, nombreNegocio: true, estatusPago: true },
-    orderBy: { estatusPago: "desc" },
-  });
+  const [overdueClients, outstandingBalances] = await Promise.all([
+    prisma.client.findMany({
+      where: { agencyId, activo: true, estatusPago: { in: ["PENDIENTE", "VENCIDO"] } },
+      select: { id: true, nombreNegocio: true, estatusPago: true },
+      orderBy: { estatusPago: "desc" },
+    }),
+    getOutstandingBalances(agencyId),
+  ]);
 
   return (
     <div className="flex min-h-screen">
@@ -56,6 +63,7 @@ export default async function AgencyLayout({ children, params }: AgencyLayoutPro
                 nombreNegocio: c.nombreNegocio,
                 estatusPago: c.estatusPago as "PENDIENTE" | "VENCIDO",
               }))}
+              outstandingBalances={outstandingBalances}
             />
             <ThemeToggle />
             <SignOutButton />

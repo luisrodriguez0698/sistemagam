@@ -36,6 +36,7 @@ export type DeliverableCardData = {
   linkEjemplo?: string | null;
   archivoUrl?: string | null;
   copy?: string | null;
+  guion?: string | null;
   orden: number;
   esExtra: boolean;
   montoExtra?: number | null;

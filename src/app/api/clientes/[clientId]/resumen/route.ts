@@ -24,6 +24,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const now = new Date();
   const anio = Number(searchParams.get("anio")) || now.getFullYear();
   const mes = Number(searchParams.get("mes")) || now.getMonth() + 1;
+  const idsParam = searchParams.get("ids");
+  const ids = idsParam ? idsParam.split(",").filter(Boolean) : undefined;
 
   const client = await prisma.client.findFirst({
     where: { id: clientId, agencyId },
@@ -32,7 +34,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   if (!client) return NextResponse.json({ error: "Cliente no encontrado" }, { status: 404 });
 
   const deliverables = await prisma.deliverable.findMany({
-    where: { clientId, agencyId, anio, mes },
+    where: { clientId, agencyId, anio, mes, ...(ids ? { id: { in: ids } } : {}) },
     orderBy: { titulo: "asc" },
   });
 

@@ -40,19 +40,32 @@ DrawerOverlay.displayName = DrawerPrimitive.Overlay.displayName;
 
 const DrawerContent = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content> & { direction?: "bottom" | "right" }
+>(({ className, children, direction = "bottom", ...props }, ref) => (
   <DrawerPortal>
     <DrawerOverlay />
     <DrawerPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed inset-x-0 bottom-0 z-50 flex h-auto flex-col rounded-t-2xl border bg-background",
+        "fixed z-50 flex flex-col border bg-background",
+        direction === "right"
+          ? "inset-y-0 right-0 h-full w-full rounded-l-2xl sm:max-w-md"
+          : "inset-x-0 bottom-0 h-auto rounded-t-2xl",
         className
       )}
       {...props}
     >
-      <div className="mx-auto mt-4 h-1.5 w-12 shrink-0 rounded-full bg-muted-foreground/30" />
+      {/* "Gusanito" para arrastrar y cerrar — horizontal arriba en el
+          bottom-sheet (se arrastra hacia abajo), vertical a la izquierda en
+          el panel lateral (se arrastra hacia la derecha, de vuelta a su
+          borde de origen). Mismo lenguaje visual, orientado según el
+          sentido en que realmente se desliza cada uno. */}
+      {direction === "bottom" && (
+        <div className="mx-auto mt-4 h-1.5 w-12 shrink-0 rounded-full bg-muted-foreground/30" />
+      )}
+      {direction === "right" && (
+        <div className="absolute left-2 top-1/2 h-12 w-1.5 -translate-y-1/2 rounded-full bg-muted-foreground/30" />
+      )}
       {children}
     </DrawerPrimitive.Content>
   </DrawerPortal>

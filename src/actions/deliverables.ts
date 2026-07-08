@@ -51,6 +51,7 @@ const updateDetailsSchema = z.object({
   fechaEntrega: z.coerce.date().optional(),
   linkEjemplo: z.string().url().max(500).optional().or(z.literal("")),
   copy: z.string().max(5000).optional(),
+  guion: z.string().max(20000).optional(),
   estado: z.nativeEnum(DeliverableStatus),
   // Solo aplican si el entregable es `esExtra`; se omiten (undefined) para
   // entregables normales, que no llevan costo/estatus de pago propio.
@@ -113,6 +114,7 @@ export async function updateDeliverableDetails(input: z.infer<typeof updateDetai
         fechaEntrega: data.fechaEntrega,
         linkEjemplo: data.linkEjemplo || null,
         copy: data.copy || null,
+        guion: data.guion || null,
         estado: data.estado,
         ...(data.montoExtra !== undefined ? { montoExtra: data.montoExtra } : {}),
         ...(data.estatusPagoExtra !== undefined ? { estatusPagoExtra: data.estatusPagoExtra } : {}),

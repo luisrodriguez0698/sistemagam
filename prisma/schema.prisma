@@ -231,6 +231,9 @@ model Deliverable {
   // se incluye en los PDF descargables (ni la parrilla de planeación ni el
   // resumen mensual) — es solo para uso interno del equipo, no para el cliente.
   copy         String?
+  // Guion del video (texto libre) — solo aplica a tipo VIDEO. Nunca se
+  // incluye en la parrilla ni en el resumen, solo en su propio PDF de guion.
+  guion        String?
   orden        Int // posición dentro de su columna (estado), para el drag-and-drop
 
   // A qué mes de la "parrilla de contenido" pertenece. Independiente de

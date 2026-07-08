@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { XIcon } from "lucide-react";
 import {
   Drawer,
   DrawerContent,
@@ -22,6 +23,12 @@ interface AppDrawerProps {
   title: string;
   description?: string;
   maxWidth?: keyof typeof MAX_WIDTH;
+  /**
+   * "right" es para paneles de selección/acción puntual (ej. elegir qué
+   * descargar) — no para formularios de captura, que siguen siendo
+   * siempre bottom-sheet.
+   */
+  direction?: "bottom" | "right";
   children: React.ReactNode;
 }
 
@@ -42,37 +49,59 @@ export function AppDrawer({
   title,
   description,
   maxWidth = "2xl",
+  direction = "bottom",
   children,
 }: AppDrawerProps) {
   return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
+    <Drawer open={open} onOpenChange={onOpenChange} direction={direction}>
       <DrawerContent
+        direction={direction}
         className={cn(
-          "max-h-[92vh] bg-background/95 backdrop-blur-lg supports-[backdrop-filter]:bg-background/80"
+          "bg-background/95 backdrop-blur-lg supports-[backdrop-filter]:bg-background/80",
+          direction === "bottom" && "max-h-[92vh]"
         )}
         onPointerDownOutside={(event) => {
-          // Select/DropdownMenu (Radix) renderizan su popup en un portal
-          // fuera del árbol del Drawer, y aun filtrando por atributo el
-          // click para cerrar ESE popup puede seguir leyéndose como un
-          // click "afuera" del Drawer. En vez de perseguir cada caso,
-          // desactivamos por completo el cierre por click-afuera: un
-          // formulario no debería cerrarse por accidente con datos sin
-          // guardar de todas formas. Sigue cerrando con "Cancelar", el
-          // botón de guardar, o arrastrando hacia abajo el drag handle.
-          event.preventDefault();
+          // Select/DropdownMenu/Popover (Radix) renderizan su popup en un
+          // portal fuera del árbol del Drawer — un click ahí se lee como
+          // "afuera" del Drawer aunque sea parte del mismo formulario, y
+          // antes eso cerraba el Drawer por accidente perdiendo lo escrito.
+          // Todo contenido posicionado por Radix (Select/Popover/Dropdown/
+          // Calendar) comparte este wrapper interno; si el click cae ahí,
+          // se ignora. Cualquier OTRO click afuera sí cierra el Drawer.
+          const target = event.target as HTMLElement | null;
+          if (target?.closest("[data-radix-popper-content-wrapper]")) {
+            event.preventDefault();
+          }
         }}
       >
         <div
           className={cn(
-            "mx-auto flex w-full flex-1 flex-col overflow-y-auto px-4 pb-8 pt-2",
-            MAX_WIDTH[maxWidth]
+            "flex w-full flex-1 flex-col overflow-y-auto px-4 pb-8 pt-2",
+            direction === "bottom" ? cn("mx-auto", MAX_WIDTH[maxWidth]) : "h-full"
           )}
         >
-          <DrawerHeader className="px-0">
-            <DrawerTitle>{title}</DrawerTitle>
-            {description && <DrawerDescription>{description}</DrawerDescription>}
+          <DrawerHeader
+            className={cn(
+              "px-0",
+              direction === "right" && "flex flex-row items-start justify-between gap-2 text-left"
+            )}
+          >
+            <div className={cn(direction === "right" && "min-w-0")}>
+              <DrawerTitle>{title}</DrawerTitle>
+              {description && <DrawerDescription>{description}</DrawerDescription>}
+            </div>
+            {direction === "right" && (
+              <button
+                type="button"
+                onClick={() => onOpenChange(false)}
+                className="shrink-0 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                aria-label="Cerrar"
+              >
+                <XIcon className="size-4" />
+              </button>
+            )}
           </DrawerHeader>
-          <div className="mt-2">{children}</div>
+          <div className="mt-2 flex-1">{children}</div>
         </div>
       </DrawerContent>
     </Drawer>
