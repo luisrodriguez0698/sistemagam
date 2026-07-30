@@ -5,12 +5,22 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getTenantSession } from "@/lib/tenant";
 import { deleteR2Object, uploadDeliverableImage as uploadToR2 } from "@/lib/r2";
-import { DeliverableStatus, DeliverableType, ExtraPaymentStatus } from "@prisma/client";
+import { DeliverableType, ExtraPaymentStatus, type Prisma } from "@prisma/client";
 import { isRecurringTipo } from "@/lib/deliverable-tipo";
+
+// Las tarjetas nuevas (creadas a mano o por `generateMonthlyDeliverables`)
+// siempre arrancan en la columna configurada más a la izquierda (`orden`
+// más chico) de esta agencia — ya no hay un "EN_PROCESO" fijo, cada agencia
+// define sus propias columnas.
+async function getFirstStatusId(tx: Prisma.TransactionClient, agencyId: string): Promise<string> {
+  const first = await tx.pipelineStatus.findFirst({ where: { agencyId }, orderBy: { orden: "asc" } });
+  if (!first) throw new Error("Esta agencia todavía no tiene estatus configurados");
+  return first.id;
+}
 
 const moveSchema = z.object({
   deliverableId: z.string().min(1),
-  estado: z.nativeEnum(DeliverableStatus),
+  statusId: z.string().min(1),
   // Lista de IDs, en orden, de todas las tarjetas que quedan en la columna
   // destino DESPUÉS del drop. Recalculamos `orden` a partir de la posición
   // en este arreglo: es más robusto que enviar un índice suelto porque
@@ -20,14 +30,16 @@ const moveSchema = z.object({
 
 export async function moveDeliverable(input: z.infer<typeof moveSchema>) {
   const { agencyId } = await getTenantSession();
-  const { deliverableId, estado, orderedIdsInTargetColumn } = moveSchema.parse(input);
+  const { deliverableId, statusId, orderedIdsInTargetColumn } = moveSchema.parse(input);
 
-  // Verifica que la tarjeta pertenezca al tenant antes de tocar nada.
-  const deliverable = await prisma.deliverable.findFirst({
-    where: { id: deliverableId, agencyId },
-    select: { id: true },
-  });
+  // Verifica que la tarjeta y el estatus destino pertenezcan al tenant
+  // antes de tocar nada.
+  const [deliverable, status] = await Promise.all([
+    prisma.deliverable.findFirst({ where: { id: deliverableId, agencyId }, select: { id: true } }),
+    prisma.pipelineStatus.findFirst({ where: { id: statusId, agencyId }, select: { id: true } }),
+  ]);
   if (!deliverable) throw new Error("Entregable no encontrado en esta agencia");
+  if (!status) throw new Error("Estatus no encontrado en esta agencia");
 
   await prisma.$transaction(
     orderedIdsInTargetColumn.map((id, index) =>
@@ -35,7 +47,7 @@ export async function moveDeliverable(input: z.infer<typeof moveSchema>) {
         where: { id, agencyId },
         data: {
           orden: index,
-          ...(id === deliverableId ? { estado } : {}),
+          ...(id === deliverableId ? { statusId } : {}),
         },
       })
     )
@@ -52,7 +64,7 @@ const updateDetailsSchema = z.object({
   linkEjemplo: z.string().url().max(500).optional().or(z.literal("")),
   copy: z.string().max(5000).optional(),
   guion: z.string().max(20000).optional(),
-  estado: z.nativeEnum(DeliverableStatus),
+  statusId: z.string().min(1),
   // Solo aplican si el entregable es `esExtra`; se omiten (undefined) para
   // entregables normales, que no llevan costo/estatus de pago propio.
   montoExtra: z.coerce.number().min(0).optional(),
@@ -73,6 +85,9 @@ export async function updateDeliverableDetails(input: z.infer<typeof updateDetai
       include: { transactions: { select: { id: true } } },
     });
     if (!existing) throw new Error("Entregable no encontrado en esta agencia");
+
+    const status = await tx.pipelineStatus.findFirst({ where: { id: data.statusId, agencyId } });
+    if (!status) throw new Error("Estatus no encontrado en esta agencia");
 
     const isBeingMarkedPaidNow =
       existing.esExtra && data.estatusPagoExtra === "PAGADO" && existing.transactions.length === 0;
@@ -115,7 +130,7 @@ export async function updateDeliverableDetails(input: z.infer<typeof updateDetai
         linkEjemplo: data.linkEjemplo || null,
         copy: data.copy || null,
         guion: data.guion || null,
-        estado: data.estado,
+        statusId: data.statusId,
         ...(data.montoExtra !== undefined ? { montoExtra: data.montoExtra } : {}),
         ...(data.estatusPagoExtra !== undefined ? { estatusPagoExtra: data.estatusPagoExtra } : {}),
       },
@@ -132,6 +147,55 @@ export async function deleteDeliverable(deliverableId: string) {
 
   const result = await prisma.deliverable.deleteMany({ where: { id: deliverableId, agencyId } });
   if (result.count === 0) throw new Error("Entregable no encontrado en esta agencia");
+
+  revalidatePath("/[agencySlug]/entregables", "page");
+}
+
+const moveToMonthSchema = z.object({
+  deliverableIds: z.array(z.string().min(1)).min(1),
+  anio: z.coerce.number().int().min(2000).max(2100),
+  mes: z.coerce.number().int().min(1).max(12),
+});
+
+/**
+ * Mueve entregables ya creados a otro mes (ej. julio → agosto) sin tener que
+ * recrearlos a mano. Conserva estatus, tipo, imagen, copy, guion, etc. —
+ * solo cambia a qué mes de la parrilla pertenecen. El `orden` se recalcula
+ * para que cada uno quede al final de su columna en el mes destino (nunca
+ * pisa el orden de tarjetas que ya estaban ahí).
+ */
+export async function moveDeliverablesToMonth(input: z.infer<typeof moveToMonthSchema>) {
+  const { agencyId } = await getTenantSession();
+  const data = moveToMonthSchema.parse(input);
+
+  await prisma.$transaction(async (tx) => {
+    const items = await tx.deliverable.findMany({
+      where: { id: { in: data.deliverableIds }, agencyId },
+      select: { id: true, statusId: true },
+    });
+    if (items.length !== data.deliverableIds.length) {
+      throw new Error("Alguno de los entregables no existe en esta agencia");
+    }
+
+    const nextOrdenByStatus = new Map<string, number>();
+    for (const item of items) {
+      if (!nextOrdenByStatus.has(item.statusId)) {
+        const maxOrden = await tx.deliverable.aggregate({
+          where: { agencyId, statusId: item.statusId, anio: data.anio, mes: data.mes },
+          _max: { orden: true },
+        });
+        nextOrdenByStatus.set(item.statusId, (maxOrden._max.orden ?? -1) + 1);
+      }
+
+      const orden = nextOrdenByStatus.get(item.statusId)!;
+      nextOrdenByStatus.set(item.statusId, orden + 1);
+
+      await tx.deliverable.update({
+        where: { id: item.id },
+        data: { anio: data.anio, mes: data.mes, orden },
+      });
+    }
+  });
 
   revalidatePath("/[agencySlug]/entregables", "page");
 }
@@ -185,8 +249,10 @@ export async function createDeliverable(input: z.infer<typeof createDeliverableS
   if (!client) throw new Error("Cliente no encontrado en esta agencia");
 
   await prisma.$transaction(async (tx) => {
+    const statusId = await getFirstStatusId(tx, agencyId);
+
     const maxOrden = await tx.deliverable.aggregate({
-      where: { agencyId, estado: "EN_PROCESO", anio: data.anio, mes: data.mes },
+      where: { agencyId, statusId, anio: data.anio, mes: data.mes },
       _max: { orden: true },
     });
 
@@ -204,7 +270,7 @@ export async function createDeliverable(input: z.infer<typeof createDeliverableS
         esExtra: data.esExtra,
         montoExtra: data.esExtra ? data.montoExtra : undefined,
         estatusPagoExtra: data.esExtra ? (data.estatusPagoExtra ?? "PENDIENTE") : undefined,
-        estado: "EN_PROCESO",
+        statusId,
         orden: (maxOrden._max.orden ?? -1) + 1,
       },
     });
@@ -276,8 +342,10 @@ export async function generateMonthlyDeliverables(input?: z.infer<typeof generat
   let created = 0;
 
   await prisma.$transaction(async (tx) => {
+    const statusId = await getFirstStatusId(tx, agencyId);
+
     const maxOrden = await tx.deliverable.aggregate({
-      where: { agencyId, estado: "EN_PROCESO", anio, mes },
+      where: { agencyId, statusId, anio, mes },
       _max: { orden: true },
     });
     let nextOrden = (maxOrden._max.orden ?? -1) + 1;
@@ -301,7 +369,7 @@ export async function generateMonthlyDeliverables(input?: z.infer<typeof generat
             clientId: config.clientId,
             tipo: config.tipo,
             titulo: `${config.tipo === "VIDEO" ? "Video" : "Diseño"} ${i}/${config.cantidadMensual} · ${config.client.nombreNegocio}`,
-            estado: "EN_PROCESO",
+            statusId,
             orden: nextOrden++,
             anio,
             mes,

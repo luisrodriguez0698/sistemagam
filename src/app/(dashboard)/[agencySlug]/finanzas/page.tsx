@@ -1,7 +1,7 @@
 import { endOfDay, startOfDay } from "date-fns";
 import { prisma } from "@/lib/prisma";
 import { getTenantSession } from "@/lib/tenant";
-import { ensurePaymentStatusesFresh, getOutstandingBalances } from "@/lib/payment-status";
+import { ensurePaymentStatusesFresh, getOmittedBillings, getOutstandingBalances } from "@/lib/payment-status";
 import { FinanceView } from "@/components/finance/finance-view";
 import type { Prisma, TransactionType } from "@prisma/client";
 
@@ -15,6 +15,7 @@ export default async function FinanzasPage({ searchParams }: FinanzasPageProps) 
   const { agencyId } = await getTenantSession();
   const billingSummaries = await ensurePaymentStatusesFresh(agencyId);
   const outstandingBalances = await getOutstandingBalances(agencyId);
+  const omittedBillings = await getOmittedBillings(agencyId);
 
   const params = await searchParams;
   const page = Math.max(1, Number(params.page) || 1);
@@ -93,6 +94,7 @@ export default async function FinanzasPage({ searchParams }: FinanzasPageProps) 
         saldoPendiente: s.saldoPendiente,
       }))}
       outstandingBalances={outstandingBalances}
+      omittedBillings={omittedBillings}
       campaigns={campaigns.map((c) => ({
         id: c.id,
         nombre: c.nombre,

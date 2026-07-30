@@ -21,23 +21,10 @@ import { NewDeliverableDrawer } from "./new-deliverable-drawer";
 import { ExportDrawer } from "./export-drawer";
 import { KanbanFilters } from "./kanban-filters";
 import { TIPO_ACCENT, TIPO_ICON, TIPO_LABEL } from "@/lib/deliverable-tipo";
+import { statusBadgeStyle, type PipelineStatusOption } from "@/lib/pipeline-status";
 import { formatDateOnly } from "@/lib/date-only";
 import type { BankAccountOption, DeliverableCardData } from "./kanban-board";
-import type { DeliverableStatus, DeliverableType } from "@prisma/client";
-
-const STATUS_LABEL: Record<DeliverableStatus, string> = {
-  EN_PROCESO: "En proceso",
-  REVISION_CLIENTE: "Revisión",
-  APROBADO: "Aprobado",
-  PUBLICADO: "Publicado",
-};
-
-const STATUS_STYLE: Record<DeliverableStatus, string> = {
-  EN_PROCESO: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-  REVISION_CLIENTE: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-  APROBADO: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-  PUBLICADO: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
-};
+import type { DeliverableType } from "@prisma/client";
 
 export interface ClientQuota {
   id: string;
@@ -53,9 +40,17 @@ interface DeliverablesTableProps {
   anio: number;
   mes: number;
   bankAccounts: BankAccountOption[];
+  statuses: PipelineStatusOption[];
 }
 
-export function DeliverablesTable({ deliverables, clients, anio, mes, bankAccounts }: DeliverablesTableProps) {
+export function DeliverablesTable({
+  deliverables,
+  clients,
+  anio,
+  mes,
+  bankAccounts,
+  statuses,
+}: DeliverablesTableProps) {
   const router = useRouter();
   const confirm = useConfirm();
   const [, startTransition] = useTransition();
@@ -281,14 +276,17 @@ export function DeliverablesTable({ deliverables, clients, anio, mes, bankAccoun
                       </span>
                     )}
 
-                    <span
-                      className={cn(
-                        "shrink-0 rounded-full px-2 py-0.5 text-xs font-medium",
-                        STATUS_STYLE[item.estado]
-                      )}
-                    >
-                      {STATUS_LABEL[item.estado]}
-                    </span>
+                    {(() => {
+                      const status = statuses.find((s) => s.id === item.statusId);
+                      return (
+                        <span
+                          className="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium"
+                          style={statusBadgeStyle(status?.color ?? "#6b7280")}
+                        >
+                          {status?.nombre ?? "—"}
+                        </span>
+                      );
+                    })()}
 
                     <button
                       onClick={() => handleDelete(item)}
@@ -318,6 +316,7 @@ export function DeliverablesTable({ deliverables, clients, anio, mes, bankAccoun
         }}
         onDeleted={() => router.refresh()}
         bankAccounts={bankAccounts}
+        statuses={statuses}
       />
 
       <NewDeliverableDrawer

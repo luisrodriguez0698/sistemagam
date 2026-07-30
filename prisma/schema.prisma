@@ -32,15 +32,16 @@ model Agency {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users          User[]
-  clients        Client[]
-  categories     Category[]
-  deliverables   Deliverable[]
-  events         Event[]
-  bankAccounts   BankAccount[]
-  transactions   Transaction[]
-  clientBillings ClientBilling[]
-  campaigns      Campaign[]
+  users            User[]
+  clients          Client[]
+  categories       Category[]
+  deliverables     Deliverable[]
+  events           Event[]
+  bankAccounts     BankAccount[]
+  transactions     Transaction[]
+  clientBillings   ClientBilling[]
+  campaigns        Campaign[]
+  pipelineStatuses PipelineStatus[]
 
   @@map("agencies")
 }
@@ -162,6 +163,10 @@ model ClientBilling {
   anio          Int
   mes           Int // 1-12
   montoEsperado Decimal  @db.Decimal(10, 2)
+  // Si por alguna razón no se le puede cobrar ese mes al cliente (se le
+  // condonó, hubo un acuerdo especial, etc.), se marca como omitido: deja
+  // de contar como saldo pendiente/vencido sin necesidad de simular un pago.
+  omitido       Boolean  @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -198,11 +203,29 @@ model ClientDeliverableConfig {
 // ENTREGABLES (KANBAN)
 // ----------------------------------------------------------------------------
 
-enum DeliverableStatus {
-  EN_PROCESO
-  REVISION_CLIENTE
-  APROBADO
-  PUBLICADO
+// Columnas del Kanban, configurables por agencia (cada una puede agregar
+// las suyas encima de las 4 que trae por defecto). `esDefault` protege a
+// esas 4 originales de borrarse (sí se pueden renombrar/recolorear);
+// `esFinal` marca cuáles cuentan como "completado" para las estadísticas
+// del resumen (por defecto Aprobado y Publicado).
+model PipelineStatus {
+  id        String   @id @default(cuid())
+  nombre    String
+  color     String   @default("#3b82f6")
+  orden     Int
+  esDefault Boolean  @default(false)
+  esFinal   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  agencyId String
+  agency   Agency @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  deliverables Deliverable[]
+
+  @@unique([agencyId, nombre])
+  @@index([agencyId, orden])
+  @@map("pipeline_statuses")
 }
 
 enum ExtraPaymentStatus {
@@ -211,11 +234,12 @@ enum ExtraPaymentStatus {
 }
 
 model Deliverable {
-  id           String            @id @default(cuid())
+  id           String          @id @default(cuid())
   tipo         DeliverableType
   titulo       String
   descripcion  String?
-  estado       DeliverableStatus @default(EN_PROCESO)
+  statusId     String
+  status       PipelineStatus  @relation(fields: [statusId], references: [id], onDelete: Restrict)
   fechaEntrega DateTime?
   // URL pública (r2.dev) de la miniatura subida a Cloudflare R2, para
   // mostrarla en el Kanban/Parrilla y embeberla en el PDF de resumen
@@ -274,7 +298,7 @@ model Deliverable {
 
   // Consulta más frecuente del Kanban: "dame las tarjetas de esta agencia
   // agrupadas/ordenadas por columna, para el mes seleccionado".
-  @@index([agencyId, estado, orden])
+  @@index([agencyId, statusId, orden])
   @@index([agencyId, anio, mes])
   @@map("deliverables")
 }

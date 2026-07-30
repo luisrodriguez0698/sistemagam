@@ -3,6 +3,7 @@ import { getTenantSession } from "@/lib/tenant";
 import { EntregablesView } from "@/components/kanban/entregables-view";
 import type { BankAccountOption, DeliverableCardData } from "@/components/kanban/kanban-board";
 import type { ClientQuota } from "@/components/kanban/deliverables-table";
+import type { PipelineStatusOption } from "@/lib/pipeline-status";
 
 interface EntregablesPageProps {
   searchParams: Promise<{ month?: string; view?: string }>; // formato YYYY-MM
@@ -17,7 +18,7 @@ export default async function EntregablesPage({ searchParams }: EntregablesPageP
     .split("-")
     .map(Number);
 
-  const [deliverables, clients, bankAccounts] = await Promise.all([
+  const [deliverables, clients, bankAccounts, pipelineStatuses] = await Promise.all([
     prisma.deliverable.findMany({
       where: { agencyId, anio: year, mes: month },
       orderBy: { orden: "asc" },
@@ -36,6 +37,10 @@ export default async function EntregablesPage({ searchParams }: EntregablesPageP
       select: { id: true, nombreBanco: true },
       orderBy: { createdAt: "asc" },
     }),
+    prisma.pipelineStatus.findMany({
+      where: { agencyId },
+      orderBy: { orden: "asc" },
+    }),
   ]);
 
   const cards: DeliverableCardData[] = deliverables.map((d) => ({
@@ -43,7 +48,7 @@ export default async function EntregablesPage({ searchParams }: EntregablesPageP
     titulo: d.titulo,
     descripcion: d.descripcion,
     tipo: d.tipo,
-    estado: d.estado,
+    statusId: d.statusId,
     fechaEntrega: d.fechaEntrega?.toISOString() ?? null,
     clientId: d.clientId,
     clienteNombre: d.client.nombreNegocio,
@@ -73,6 +78,15 @@ export default async function EntregablesPage({ searchParams }: EntregablesPageP
     nombreBanco: a.nombreBanco,
   }));
 
+  const statuses: PipelineStatusOption[] = pipelineStatuses.map((s) => ({
+    id: s.id,
+    nombre: s.nombre,
+    color: s.color,
+    orden: s.orden,
+    esDefault: s.esDefault,
+    esFinal: s.esFinal,
+  }));
+
   return (
     <div className="space-y-4">
       <div>
@@ -87,6 +101,7 @@ export default async function EntregablesPage({ searchParams }: EntregablesPageP
         deliverables={cards}
         clients={clientQuotas}
         bankAccounts={bankAccountOptions}
+        statuses={statuses}
         initialView={view === "table" ? "table" : "board"}
       />
     </div>

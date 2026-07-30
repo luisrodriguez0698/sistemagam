@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 import { TIPO_ACCENT, TIPO_ICON } from "@/lib/deliverable-tipo";
 import { EventDrawer } from "./event-drawer";
 import { DayDeliverablesDrawer } from "./day-deliverables-drawer";
-import type { DeliverableStatus, DeliverableType, EventType } from "@prisma/client";
+import type { DeliverableType, EventType } from "@prisma/client";
 
 export type CalendarEventData = {
   id: string;
@@ -38,7 +38,8 @@ export type CalendarDeliverableData = {
   id: string;
   titulo: string;
   tipo: DeliverableType;
-  estado: DeliverableStatus;
+  statusNombre: string;
+  statusColor: string;
   fechaEntrega: string; // ISO
   clientId: string;
   clienteNombre: string;

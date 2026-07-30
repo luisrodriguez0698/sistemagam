@@ -12,7 +12,9 @@ import { TransactionDrawer } from "./transaction-drawer";
 import { OutstandingBalances } from "./outstanding-balances";
 import { CampaignsSection, type CampaignRow } from "./campaigns-section";
 import type { CampaignDeliverableOption } from "./campaign-drawer";
-import type { OutstandingBalance } from "@/lib/payment-status";
+import { useConfirm } from "@/components/confirm-provider";
+import { setClientBillingOmitido } from "@/actions/client-billing";
+import type { OmittedBilling, OutstandingBalance } from "@/lib/payment-status";
 import {
   TransactionsTable,
   type PaginationInfo,
@@ -40,6 +42,7 @@ interface FinanceViewProps {
   clients: ClientOption[];
   clientBalances: ClientBalance[];
   outstandingBalances: OutstandingBalance[];
+  omittedBillings: OmittedBilling[];
   campaigns: CampaignRow[];
   campaignDeliverables: CampaignDeliverableOption[];
   pagination: PaginationInfo;
@@ -52,12 +55,14 @@ export function FinanceView({
   clients,
   clientBalances,
   outstandingBalances,
+  omittedBillings,
   campaigns,
   campaignDeliverables,
   pagination,
   filters,
 }: FinanceViewProps) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [accountDrawerOpen, setAccountDrawerOpen] = React.useState(false);
   const [newTransactionTipo, setNewTransactionTipo] = React.useState<"INGRESO" | "GASTO" | null>(null);
   const [editingTransaction, setEditingTransaction] = React.useState<TransactionRow | null>(null);
@@ -81,6 +86,28 @@ export function FinanceView({
       monto: balance.saldoPendiente,
     });
     setNewTransactionTipo("INGRESO");
+  }
+
+  async function handleOmit(balance: OutstandingBalance) {
+    const monthLabel = format(new Date(balance.anio, balance.mes - 1, 1), "MMMM yyyy", { locale: es });
+    const ok = await confirm({
+      title: `¿Omitir el cobro de ${monthLabel}?`,
+      description: `${balance.nombreNegocio} dejará de aparecer con saldo pendiente ese mes.`,
+      confirmText: "Omitir",
+    });
+    if (!ok) return;
+    await setClientBillingOmitido({
+      clientId: balance.clientId,
+      anio: balance.anio,
+      mes: balance.mes,
+      omitido: true,
+    });
+    router.refresh();
+  }
+
+  async function handleUndoOmit(item: OmittedBilling) {
+    await setClientBillingOmitido({ clientId: item.clientId, anio: item.anio, mes: item.mes, omitido: false });
+    router.refresh();
   }
 
   return (
@@ -130,7 +157,13 @@ export function FinanceView({
 
       <div>
         <h2 className="mb-2 text-sm font-semibold">Cuentas por cobrar</h2>
-        <OutstandingBalances balances={outstandingBalances} onRegisterPayment={handleRegisterOutstanding} />
+        <OutstandingBalances
+          balances={outstandingBalances}
+          omittedBillings={omittedBillings}
+          onRegisterPayment={handleRegisterOutstanding}
+          onOmit={handleOmit}
+          onUndoOmit={handleUndoOmit}
+        />
       </div>
 
       <div>

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { hash } from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { passwordSchema } from "@/lib/password";
+import { DEFAULT_PIPELINE_STATUSES } from "@/lib/pipeline-status";
 
 const slugify = (value: string) =>
   value
@@ -39,6 +40,19 @@ export async function registerAgency(input: z.infer<typeof registerAgencySchema>
   const agency = await prisma.$transaction(async (tx) => {
     const createdAgency = await tx.agency.create({
       data: { name: data.agencyName, slug },
+    });
+
+    // Toda agencia arranca con las 4 columnas base del Tablero — el
+    // usuario puede agregar más encima desde "Gestionar estatus".
+    await tx.pipelineStatus.createMany({
+      data: DEFAULT_PIPELINE_STATUSES.map((status) => ({
+        agencyId: createdAgency.id,
+        nombre: status.nombre,
+        color: status.color,
+        orden: status.orden,
+        esFinal: status.esFinal,
+        esDefault: true,
+      })),
     });
 
     await tx.user.create({

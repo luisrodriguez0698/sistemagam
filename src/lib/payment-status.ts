@@ -75,9 +75,11 @@ export const ensurePaymentStatusesFresh = cache(async (agencyId: string): Promis
     const client = eligibleClients.find((c) => c.id === billing.clientId)!;
     const montoPagado = billing.transactions.reduce((sum, t) => sum + Number(t.monto), 0);
     const montoEsperado = Number(billing.montoEsperado);
-    const saldoPendiente = Math.max(montoEsperado - montoPagado, 0);
+    const saldoPendiente = billing.omitido ? 0 : Math.max(montoEsperado - montoPagado, 0);
     const cutoffDay = client.diaCobro ?? DEFAULT_CUTOFF_DAY;
 
+    // Un cargo omitido (no se le cobra ese mes por algún motivo) nunca
+    // cuenta como pendiente/vencido, sin importar cuánto se haya pagado.
     const estatus: PaymentStatus =
       saldoPendiente <= 0 ? "AL_DIA" : today > cutoffDay ? "VENCIDO" : "PENDIENTE";
 
@@ -112,6 +114,13 @@ export interface OutstandingBalance {
   saldoPendiente: number;
 }
 
+export interface OmittedBilling {
+  clientId: string;
+  nombreNegocio: string;
+  anio: number;
+  mes: number;
+}
+
 /**
  * A diferencia de `ensurePaymentStatusesFresh` (que solo mira el mes en
  * curso), esto recorre TODOS los cargos (`ClientBilling`) históricos y
@@ -131,6 +140,7 @@ export async function getOutstandingBalances(agencyId: string): Promise<Outstand
   });
 
   return billings
+    .filter((b) => !b.omitido)
     .map((b) => {
       const montoPagado = b.transactions.reduce((sum, t) => sum + Number(t.monto), 0);
       const montoEsperado = Number(b.montoEsperado);
@@ -146,4 +156,24 @@ export async function getOutstandingBalances(agencyId: string): Promise<Outstand
       };
     })
     .filter((b) => b.saldoPendiente > 0);
+}
+
+/**
+ * Cargos mensuales marcados como "omitidos" (no se le cobra al cliente ese
+ * mes) — para poder verlos/deshacerlos, ya que al omitirse desaparecen de
+ * "Cuentas por cobrar".
+ */
+export async function getOmittedBillings(agencyId: string): Promise<OmittedBilling[]> {
+  const billings = await prisma.clientBilling.findMany({
+    where: { agencyId, omitido: true, client: { activo: true } },
+    include: { client: { select: { nombreNegocio: true } } },
+    orderBy: [{ anio: "desc" }, { mes: "desc" }],
+  });
+
+  return billings.map((b) => ({
+    clientId: b.clientId,
+    nombreNegocio: b.client.nombreNegocio,
+    anio: b.anio,
+    mes: b.mes,
+  }));
 }

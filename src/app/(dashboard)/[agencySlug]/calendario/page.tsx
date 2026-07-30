@@ -33,7 +33,10 @@ export default async function CalendarioPage({ searchParams }: CalendarioPagePro
     }),
     prisma.deliverable.findMany({
       where: { agencyId, fechaEntrega: { gte: monthStartUTC, lte: monthEndUTC } },
-      include: { client: { select: { nombreNegocio: true } } },
+      include: {
+        client: { select: { nombreNegocio: true } },
+        status: { select: { nombre: true, color: true } },
+      },
       orderBy: { fechaEntrega: "asc" },
     }),
     prisma.client.findMany({
@@ -58,7 +61,8 @@ export default async function CalendarioPage({ searchParams }: CalendarioPagePro
     id: d.id,
     titulo: d.titulo,
     tipo: d.tipo,
-    estado: d.estado,
+    statusNombre: d.status.nombre,
+    statusColor: d.status.color,
     fechaEntrega: d.fechaEntrega!.toISOString(),
     clientId: d.clientId,
     clienteNombre: d.client.nombreNegocio,

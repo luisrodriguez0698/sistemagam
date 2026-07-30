@@ -21,14 +21,16 @@ import { DeliverableCard } from "./deliverable-card";
 import { DeliverableDrawer } from "./deliverable-drawer";
 import { KanbanFilters } from "./kanban-filters";
 import { moveDeliverable } from "@/actions/deliverables";
-import type { DeliverableStatus, DeliverableType, ExtraPaymentStatus } from "@prisma/client";
+import type { ClientFilterOption } from "./kanban-filters";
+import type { PipelineStatusOption } from "@/lib/pipeline-status";
+import type { DeliverableType, ExtraPaymentStatus } from "@prisma/client";
 
 export type DeliverableCardData = {
   id: string;
   titulo: string;
   descripcion?: string | null;
   tipo: DeliverableType;
-  estado: DeliverableStatus;
+  statusId: string;
   fechaEntrega?: string | null; // ISO string, serializado desde el Server Component
   clientId: string;
   clienteNombre: string;
@@ -53,16 +55,25 @@ export interface BankAccountOption {
   nombreBanco: string;
 }
 
-const COLUMNS: { id: DeliverableStatus; title: string; accentClassName: string }[] = [
-  { id: "EN_PROCESO", title: "En proceso", accentClassName: "bg-blue-500" },
-  { id: "REVISION_CLIENTE", title: "Revisión del cliente", accentClassName: "bg-amber-500" },
-  { id: "APROBADO", title: "Aprobado", accentClassName: "bg-emerald-500" },
-  { id: "PUBLICADO", title: "Publicado", accentClassName: "bg-violet-500" },
-];
-
 interface KanbanBoardProps {
   initialDeliverables: DeliverableCardData[];
   bankAccounts: BankAccountOption[];
+  // Columnas del Tablero — configurables por agencia (ver PipelineStatus),
+  // ya no son un enum fijo de 4 valores.
+  statuses: PipelineStatusOption[];
+  // Filtros/orden viven en el padre (EntregablesView) para sobrevivir el
+  // resync de datos frescos del servidor (ver useEffect más abajo) — antes
+  // vivían aquí adentro y un simple arrastre de tarjeta (que revalida datos
+  // del servidor) los reseteaba sin que el usuario lo pidiera.
+  clientOptions: ClientFilterOption[];
+  selectedClientIds: Set<string>;
+  onToggleClient: (clientId: string) => void;
+  onSelectAllClients: () => void;
+  onSelectNoClients: () => void;
+  tipoFilter: DeliverableType | "ALL";
+  onTipoFilterChange: (tipo: DeliverableType | "ALL") => void;
+  sortMode: SortMode;
+  onSortModeChange: (mode: SortMode) => void;
 }
 
 // `closestCorners` compara distancias entre esquinas de TODOS los
@@ -78,7 +89,7 @@ const collisionDetectionStrategy: CollisionDetection = (args) => {
   return pointerCollisions.length > 0 ? pointerCollisions : rectIntersection(args);
 };
 
-type SortMode = "MANUAL" | "NOMBRE" | "TIPO";
+export type SortMode = "MANUAL" | "NOMBRE" | "TIPO";
 
 const SORT_OPTIONS: { value: SortMode; label: string }[] = [
   { value: "MANUAL", label: "Manual" },
@@ -117,38 +128,34 @@ function sortItems(items: DeliverableCardData[], mode: SortMode): DeliverableCar
   return sorted;
 }
 
-export function KanbanBoard({ initialDeliverables, bankAccounts }: KanbanBoardProps) {
-  const [columns, setColumns] = React.useState<Record<DeliverableStatus, DeliverableCardData[]>>(
-    () => groupByStatus(initialDeliverables)
+export function KanbanBoard({
+  initialDeliverables,
+  bankAccounts,
+  statuses,
+  clientOptions,
+  selectedClientIds,
+  onToggleClient,
+  onSelectAllClients,
+  onSelectNoClients,
+  tipoFilter,
+  onTipoFilterChange,
+  sortMode,
+  onSortModeChange,
+}: KanbanBoardProps) {
+  const [columns, setColumns] = React.useState<Record<string, DeliverableCardData[]>>(
+    () => groupByStatus(initialDeliverables, statuses)
   );
   const [activeCard, setActiveCard] = React.useState<DeliverableCardData | null>(null);
   const [selectedCard, setSelectedCard] = React.useState<DeliverableCardData | null>(null);
   const [drawerOpen, setDrawerOpen] = React.useState(false);
-  const [tipoFilter, setTipoFilter] = React.useState<DeliverableType | "ALL">("ALL");
-  const [sortMode, setSortMode] = React.useState<SortMode>("MANUAL");
 
-  const clientOptions = React.useMemo(() => {
-    const seen = new Map<string, { id: string; nombreNegocio: string; colorHex: string }>();
-    for (const d of initialDeliverables) {
-      if (!seen.has(d.clientId)) {
-        seen.set(d.clientId, { id: d.clientId, nombreNegocio: d.clienteNombre, colorHex: d.clienteColor });
-      }
-    }
-    return [...seen.values()].sort((a, b) => a.nombreNegocio.localeCompare(b.nombreNegocio));
-  }, [initialDeliverables]);
-
-  const [selectedClientIds, setSelectedClientIds] = React.useState<Set<string>>(
-    () => new Set(clientOptions.map((c) => c.id))
-  );
-
-  function toggleClient(clientId: string) {
-    setSelectedClientIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(clientId)) next.delete(clientId);
-      else next.add(clientId);
-      return next;
-    });
-  }
+  // Re-sincroniza las columnas cuando llegan datos frescos del servidor
+  // (ej. tras un `revalidatePath` tras arrastrar una tarjeta o editar desde
+  // la Parrilla), SIN remontar el componente — así el resto del estado del
+  // Tablero (filtros, orden, qué tarjeta tienes seleccionada) no se pierde.
+  React.useEffect(() => {
+    setColumns(groupByStatus(initialDeliverables, statuses));
+  }, [initialDeliverables, statuses]);
 
   function isCardVisible(deliverable: DeliverableCardData) {
     return (
@@ -170,10 +177,8 @@ export function KanbanBoard({ initialDeliverables, bankAccounts }: KanbanBoardPr
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } })
   );
 
-  function findColumnOf(id: string): DeliverableStatus | undefined {
-    return (Object.keys(columns) as DeliverableStatus[]).find((status) =>
-      columns[status].some((item) => item.id === id)
-    );
+  function findColumnOf(id: string): string | undefined {
+    return Object.keys(columns).find((status) => columns[status].some((item) => item.id === id));
   }
 
   function handleDragStart(event: DragStartEvent) {
@@ -200,9 +205,7 @@ export function KanbanBoard({ initialDeliverables, bankAccounts }: KanbanBoardPr
     const fromStatus = findColumnOf(activeId);
     if (!fromStatus) return;
 
-    const toStatus = (COLUMNS.find((c) => c.id === overId)?.id ?? findColumnOf(overId)) as
-      | DeliverableStatus
-      | undefined;
+    const toStatus = statuses.find((s) => s.id === overId)?.id ?? findColumnOf(overId);
     if (!toStatus) return;
 
     const sourceItems = columns[fromStatus];
@@ -230,7 +233,7 @@ export function KanbanBoard({ initialDeliverables, bankAccounts }: KanbanBoardPr
 
       reorderedTarget = [
         ...targetItems.slice(0, insertIndex),
-        { ...card, estado: toStatus },
+        { ...card, statusId: toStatus },
         ...targetItems.slice(insertIndex),
       ];
 
@@ -246,7 +249,7 @@ export function KanbanBoard({ initialDeliverables, bankAccounts }: KanbanBoardPr
     // revertir el estado — omitido aquí por brevedad.
     void moveDeliverable({
       deliverableId: activeId,
-      estado: toStatus,
+      statusId: toStatus,
       orderedIdsInTargetColumn: reorderedTarget.map((c) => c.id),
     });
   }
@@ -259,7 +262,7 @@ export function KanbanBoard({ initialDeliverables, bankAccounts }: KanbanBoardPr
   function handleSaved(updated: DeliverableCardData) {
     setColumns((prev) => ({
       ...prev,
-      [updated.estado]: prev[updated.estado].map((c) => (c.id === updated.id ? updated : c)),
+      [updated.statusId]: (prev[updated.statusId] ?? []).map((c) => (c.id === updated.id ? updated : c)),
     }));
     // El Drawer sigue leyendo `selectedCard` (no la lista `columns`) mientras
     // está abierto — sin esto, subir una imagen no se vería reflejada ahí
@@ -270,7 +273,7 @@ export function KanbanBoard({ initialDeliverables, bankAccounts }: KanbanBoardPr
   function handleDeleted(deliverableId: string) {
     setColumns((prev) => {
       const next = { ...prev };
-      for (const status of Object.keys(next) as DeliverableStatus[]) {
+      for (const status of Object.keys(next)) {
         next[status] = next[status].filter((c) => c.id !== deliverableId);
       }
       return next;
@@ -283,11 +286,11 @@ export function KanbanBoard({ initialDeliverables, bankAccounts }: KanbanBoardPr
         <KanbanFilters
           clients={clientOptions}
           selectedClientIds={selectedClientIds}
-          onToggleClient={toggleClient}
-          onSelectAllClients={() => setSelectedClientIds(new Set(clientOptions.map((c) => c.id)))}
-          onSelectNoClients={() => setSelectedClientIds(new Set())}
+          onToggleClient={onToggleClient}
+          onSelectAllClients={onSelectAllClients}
+          onSelectNoClients={onSelectNoClients}
           tipoFilter={tipoFilter}
-          onTipoFilterChange={setTipoFilter}
+          onTipoFilterChange={onTipoFilterChange}
         />
 
         <div className="flex items-center gap-1.5">
@@ -296,7 +299,7 @@ export function KanbanBoard({ initialDeliverables, bankAccounts }: KanbanBoardPr
             {SORT_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
-                onClick={() => setSortMode(opt.value)}
+                onClick={() => onSortModeChange(opt.value)}
                 className={cn(
                   "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
                   sortMode === opt.value
@@ -323,13 +326,13 @@ export function KanbanBoard({ initialDeliverables, bankAccounts }: KanbanBoardPr
               la siguiente) para que el swipe horizontal se sienta como un
               carrusel; en sm+ vuelve al ancho fijo original de varias
               columnas visibles a la vez. */}
-          {COLUMNS.map((column) => (
+          {statuses.map((status) => (
             <KanbanColumn
-              key={column.id}
-              id={column.id}
-              title={column.title}
-              accentClassName={column.accentClassName}
-              items={sortItems(columns[column.id], sortMode)}
+              key={status.id}
+              id={status.id}
+              title={status.nombre}
+              color={status.color}
+              items={sortItems(columns[status.id] ?? [], sortMode)}
               onCardClick={handleCardClick}
               isVisible={isCardVisible}
             />
@@ -348,21 +351,24 @@ export function KanbanBoard({ initialDeliverables, bankAccounts }: KanbanBoardPr
         onSaved={handleSaved}
         onDeleted={handleDeleted}
         bankAccounts={bankAccounts}
+        statuses={statuses}
       />
     </>
   );
 }
 
-function groupByStatus(deliverables: DeliverableCardData[]) {
-  const base: Record<DeliverableStatus, DeliverableCardData[]> = {
-    EN_PROCESO: [],
-    REVISION_CLIENTE: [],
-    APROBADO: [],
-    PUBLICADO: [],
-  };
-  for (const d of deliverables) base[d.estado].push(d);
-  for (const status of Object.keys(base) as DeliverableStatus[]) {
-    base[status].sort((a, b) => a.orden - b.orden);
+function groupByStatus(
+  deliverables: DeliverableCardData[],
+  statuses: PipelineStatusOption[]
+): Record<string, DeliverableCardData[]> {
+  const base: Record<string, DeliverableCardData[]> = {};
+  for (const status of statuses) base[status.id] = [];
+  for (const d of deliverables) {
+    if (!base[d.statusId]) base[d.statusId] = [];
+    base[d.statusId].push(d);
+  }
+  for (const statusId of Object.keys(base)) {
+    base[statusId].sort((a, b) => a.orden - b.orden);
   }
   return base;
 }

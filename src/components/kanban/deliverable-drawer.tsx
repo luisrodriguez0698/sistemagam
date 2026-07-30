@@ -16,19 +16,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { deleteDeliverable, updateDeliverableDetails } from "@/actions/deliverables";
-import { DeliverableStatus, ExtraPaymentStatus } from "@prisma/client";
+import { ExtraPaymentStatus } from "@prisma/client";
 import type { BankAccountOption, DeliverableCardData } from "./kanban-board";
 import { DeliverableImageUpload } from "./deliverable-image-upload";
 import { CheckIcon, CopyIcon } from "lucide-react";
 import { TIPO_LABEL } from "@/lib/deliverable-tipo";
+import type { PipelineStatusOption } from "@/lib/pipeline-status";
 import { useConfirm } from "@/components/confirm-provider";
-
-const STATUS_LABEL: Record<DeliverableStatus, string> = {
-  EN_PROCESO: "En proceso",
-  REVISION_CLIENTE: "Revisión del cliente",
-  APROBADO: "Aprobado",
-  PUBLICADO: "Publicado",
-};
 
 interface DeliverableDrawerProps {
   deliverable: DeliverableCardData | null;
@@ -37,6 +31,7 @@ interface DeliverableDrawerProps {
   onSaved: (updated: DeliverableCardData) => void;
   onDeleted: (deliverableId: string) => void;
   bankAccounts: BankAccountOption[];
+  statuses: PipelineStatusOption[];
 }
 
 export function DeliverableDrawer({
@@ -46,6 +41,7 @@ export function DeliverableDrawer({
   onSaved,
   onDeleted,
   bankAccounts,
+  statuses,
 }: DeliverableDrawerProps) {
   const confirm = useConfirm();
   const [isPending, startTransition] = useTransition();
@@ -53,7 +49,7 @@ export function DeliverableDrawer({
   const [titulo, setTitulo] = React.useState("");
   const [descripcion, setDescripcion] = React.useState("");
   const [fechaEntrega, setFechaEntrega] = React.useState("");
-  const [estado, setEstado] = React.useState<DeliverableStatus>("EN_PROCESO");
+  const [statusId, setStatusId] = React.useState("");
   const [montoExtra, setMontoExtra] = React.useState("");
   const [estatusPagoExtra, setEstatusPagoExtra] = React.useState<ExtraPaymentStatus>("PENDIENTE");
   const [bankAccountId, setBankAccountId] = React.useState("");
@@ -75,7 +71,7 @@ export function DeliverableDrawer({
     setTitulo(deliverable.titulo);
     setDescripcion(deliverable.descripcion ?? "");
     setFechaEntrega(deliverable.fechaEntrega ? deliverable.fechaEntrega.slice(0, 10) : "");
-    setEstado(deliverable.estado);
+    setStatusId(deliverable.statusId);
     setMontoExtra(deliverable.montoExtra != null ? String(deliverable.montoExtra) : "");
     setEstatusPagoExtra(deliverable.estatusPagoExtra ?? "PENDIENTE");
     setLinkEjemplo(deliverable.linkEjemplo ?? "");
@@ -112,7 +108,7 @@ export function DeliverableDrawer({
           linkEjemplo: linkEjemplo || undefined,
           copy: copy || undefined,
           guion: deliverable!.tipo === "VIDEO" ? guion || undefined : undefined,
-          estado,
+          statusId,
           montoExtra: deliverable!.esExtra ? Number(montoExtra) : undefined,
           estatusPagoExtra: deliverable!.esExtra ? estatusPagoExtra : undefined,
           bankAccountId: needsBankAccount ? bankAccountId : undefined,
@@ -125,7 +121,7 @@ export function DeliverableDrawer({
           linkEjemplo,
           copy,
           guion,
-          estado,
+          statusId,
           montoExtra: deliverable!.esExtra ? Number(montoExtra) : deliverable!.montoExtra,
           estatusPagoExtra: deliverable!.esExtra ? estatusPagoExtra : deliverable!.estatusPagoExtra,
           hasPaymentTransaction: deliverable!.hasPaymentTransaction || needsBankAccount,
@@ -185,14 +181,14 @@ export function DeliverableDrawer({
 
           <div className="space-y-1.5">
             <Label>Estatus</Label>
-            <Select value={estado} onValueChange={(v) => setEstado(v as DeliverableStatus)}>
+            <Select value={statusId} onValueChange={setStatusId}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(STATUS_LABEL).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
+                {statuses.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.nombre}
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -51,7 +51,7 @@ export default async function DashboardPage() {
       where: {
         agencyId,
         fechaEntrega: { gte: monthStart, lte: monthEnd },
-        estado: { in: ["APROBADO", "PUBLICADO"] },
+        status: { esFinal: true },
       },
     }),
     prisma.client.findMany({
