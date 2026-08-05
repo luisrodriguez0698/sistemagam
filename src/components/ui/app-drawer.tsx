@@ -52,6 +52,26 @@ export function AppDrawer({
   direction = "bottom",
   children,
 }: AppDrawerProps) {
+  // Radix Dialog difiere su propio `onPointerDownOutside` al evento "click"
+  // que sigue al pointerdown (`deferPointerDownOutside`), pero un <Select>
+  // anidado NO difiere el suyo — se cierra (y desmonta su
+  // `[data-radix-popper-content-wrapper]`) de inmediato, en el pointerdown
+  // mismo. Para cuando nuestro handler de abajo por fin corre (en el click,
+  // ya tarde), el Select ya no existe en el DOM, así que preguntarlo ahí
+  // siempre da "no hay ninguno abierto" aunque sí lo hubiera al momento del
+  // click real. Por eso se captura el estado ANTES, con un listener propio
+  // en fase de captura (que por definición corre antes que cualquier
+  // listener en fase de burbuja, sin importar el orden de montaje).
+  const wasPopperOpenRef = React.useRef(false);
+
+  React.useEffect(() => {
+    function capturePopperState() {
+      wasPopperOpenRef.current = document.querySelector("[data-radix-popper-content-wrapper]") != null;
+    }
+    document.addEventListener("pointerdown", capturePopperState, true);
+    return () => document.removeEventListener("pointerdown", capturePopperState, true);
+  }, []);
+
   return (
     <Drawer open={open} onOpenChange={onOpenChange} direction={direction}>
       <DrawerContent
@@ -61,15 +81,20 @@ export function AppDrawer({
           direction === "bottom" && "max-h-[92vh]"
         )}
         onPointerDownOutside={(event) => {
-          // Select/DropdownMenu/Popover (Radix) renderizan su popup en un
-          // portal fuera del árbol del Drawer — un click ahí se lee como
-          // "afuera" del Drawer aunque sea parte del mismo formulario, y
-          // antes eso cerraba el Drawer por accidente perdiendo lo escrito.
-          // Todo contenido posicionado por Radix (Select/Popover/Dropdown/
-          // Calendar) comparte este wrapper interno; si el click cae ahí,
-          // se ignora. Cualquier OTRO click afuera sí cierra el Drawer.
-          const target = event.target as HTMLElement | null;
-          if (target?.closest("[data-radix-popper-content-wrapper]")) {
+          // Mientras un Select/DropdownMenu/Popover (Radix) está ABIERTO,
+          // Radix bloquea los pointer-events de TODO excepto su propio
+          // popup — incluyendo el contenido de este Drawer. Un click en un
+          // espacio vacío del formulario (con la sola intención de cerrar
+          // el Select sin elegir nada) entonces no golpea el formulario
+          // sino lo que sea que quede "detrás" en ese punto — en este caso
+          // el overlay oscuro del propio Drawer (`data-vaul-overlay`),
+          // que a propósito se deja siempre clickeable — y eso se leía
+          // como "clickeaste afuera del Drawer" y lo cerraba también a él.
+          // Se usa el valor capturado en el pointerdown (ver arriba), no
+          // una consulta en vivo aquí — para cuando este handler corre, un
+          // Select que sí estaba abierto en ese instante ya pudo haberse
+          // desmontado solo.
+          if (wasPopperOpenRef.current) {
             event.preventDefault();
           }
         }}

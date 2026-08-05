@@ -151,6 +151,20 @@ export async function deleteDeliverable(deliverableId: string) {
   revalidatePath("/[agencySlug]/entregables", "page");
 }
 
+const deleteManySchema = z.object({
+  deliverableIds: z.array(z.string().min(1)).min(1),
+});
+
+/** Borra varios entregables de un jalón — ej. "seleccionar todos" de un cliente en la Parrilla. */
+export async function deleteDeliverables(input: z.infer<typeof deleteManySchema>) {
+  const { agencyId } = await getTenantSession();
+  const { deliverableIds } = deleteManySchema.parse(input);
+
+  await prisma.deliverable.deleteMany({ where: { id: { in: deliverableIds }, agencyId } });
+
+  revalidatePath("/[agencySlug]/entregables", "page");
+}
+
 const moveToMonthSchema = z.object({
   deliverableIds: z.array(z.string().min(1)).min(1),
   anio: z.coerce.number().int().min(2000).max(2100),

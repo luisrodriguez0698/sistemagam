@@ -77,6 +77,21 @@ export function MoveMonthDrawer({ open, onOpenChange, anio, mes, deliverables }:
     });
   }
 
+  // El "Todos"/"Ninguno" de arriba es global (todos los clientes del mes);
+  // este otro solo toca los entregables del cliente en cuestión, para no
+  // tener que ir marcando uno por uno cuando quieres mover un cliente
+  // completo pero no los demás.
+  function toggleAllForClient(items: DeliverableCardData[], select: boolean) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const item of items) {
+        if (select) next.add(item.id);
+        else next.delete(item.id);
+      }
+      return next;
+    });
+  }
+
   async function handleSubmit() {
     setError(null);
     if (isSameMonth) {
@@ -176,9 +191,25 @@ export function MoveMonthDrawer({ open, onOpenChange, anio, mes, deliverables }:
               ) : (
                 [...byClient.entries()].map(([clientId, items]) => (
                   <div key={clientId}>
-                    <p className="px-1 pb-1 text-xs font-semibold text-muted-foreground">
-                      {items[0].clienteNombre}
-                    </p>
+                    <div className="flex items-center justify-between gap-2 px-1 pb-1">
+                      <p className="text-xs font-semibold text-muted-foreground">{items[0].clienteNombre}</p>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+                          onClick={() => toggleAllForClient(items, true)}
+                        >
+                          Todos
+                        </button>
+                        <button
+                          type="button"
+                          className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+                          onClick={() => toggleAllForClient(items, false)}
+                        >
+                          Ninguno
+                        </button>
+                      </div>
+                    </div>
                     {items.map((item) => {
                       const TipoIcon = TIPO_ICON[item.tipo];
                       return (

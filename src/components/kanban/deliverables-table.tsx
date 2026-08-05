@@ -15,7 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useConfirm } from "@/components/confirm-provider";
-import { deleteDeliverable } from "@/actions/deliverables";
+import { deleteDeliverable, deleteDeliverables } from "@/actions/deliverables";
 import { DeliverableDrawer } from "./deliverable-drawer";
 import { NewDeliverableDrawer } from "./new-deliverable-drawer";
 import { ExportDrawer } from "./export-drawer";
@@ -64,6 +64,11 @@ export function DeliverablesTable({
   );
   const [collapsedClientIds, setCollapsedClientIds] = React.useState<Set<string>>(() => new Set());
   const [exportDrawerClient, setExportDrawerClient] = React.useState<ClientQuota | null>(null);
+  // IDs marcados para borrado masivo — vive en un solo Set (no por cliente)
+  // porque nada impide, en teoría, tener marcados entregables de más de un
+  // cliente a la vez; el botón "Eliminar seleccionados" de cada cliente solo
+  // actúa sobre los suyos.
+  const [selectedForDeleteIds, setSelectedForDeleteIds] = React.useState<Set<string>>(() => new Set());
 
   const byClient = new Map<string, DeliverableCardData[]>();
   for (const d of deliverables) {
@@ -89,6 +94,47 @@ export function DeliverablesTable({
     if (!ok) return;
     startTransition(async () => {
       await deleteDeliverable(deliverable.id);
+      router.refresh();
+    });
+  }
+
+  function toggleSelectedForDelete(id: string) {
+    setSelectedForDeleteIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAllForClient(items: DeliverableCardData[], allSelected: boolean) {
+    setSelectedForDeleteIds((prev) => {
+      const next = new Set(prev);
+      for (const item of items) {
+        if (allSelected) next.delete(item.id);
+        else next.add(item.id);
+      }
+      return next;
+    });
+  }
+
+  async function handleBulkDelete(items: DeliverableCardData[]) {
+    if (items.length === 0) return;
+    const ok = await confirm({
+      title: `¿Eliminar ${items.length} entregable${items.length === 1 ? "" : "s"}?`,
+      description: "Esta acción no se puede deshacer.",
+      confirmText: "Eliminar",
+      variant: "destructive",
+    });
+    if (!ok) return;
+    const ids = items.map((item) => item.id);
+    startTransition(async () => {
+      await deleteDeliverables({ deliverableIds: ids });
+      setSelectedForDeleteIds((prev) => {
+        const next = new Set(prev);
+        for (const id of ids) next.delete(id);
+        return next;
+      });
       router.refresh();
     });
   }
@@ -152,6 +198,8 @@ export function DeliverablesTable({
         const videosCount = allItems.filter((d) => d.tipo === "VIDEO" && !d.esExtra).length;
         const disenosCount = allItems.filter((d) => d.tipo === "DISENO" && !d.esExtra).length;
         const isCollapsed = collapsedClientIds.has(client.id);
+        const selectedCountForClient = items.filter((item) => selectedForDeleteIds.has(item.id)).length;
+        const allSelectedForClient = items.length > 0 && selectedCountForClient === items.length;
 
         return (
           <div key={client.id} className="overflow-hidden rounded-2xl border">
@@ -178,7 +226,18 @@ export function DeliverablesTable({
                   </p>
                 </div>
               </button>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {selectedCountForClient > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1 text-destructive hover:text-destructive"
+                    onClick={() => handleBulkDelete(items.filter((item) => selectedForDeleteIds.has(item.id)))}
+                  >
+                    <Trash2Icon className="size-4" />
+                    Eliminar ({selectedCountForClient})
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="outline"
@@ -199,6 +258,15 @@ export function DeliverablesTable({
               <p className="p-4 text-sm text-muted-foreground">Sin entregables este mes todavía.</p>
             ) : (
               <div className="divide-y">
+                <label className="flex items-center gap-3 px-4 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/30">
+                  <input
+                    type="checkbox"
+                    checked={allSelectedForClient}
+                    onChange={() => toggleSelectAllForClient(items, allSelectedForClient)}
+                    className="size-3.5"
+                  />
+                  Seleccionar todos
+                </label>
                 {items.map((item) => {
                   const TipoIcon = TIPO_ICON[item.tipo];
                   return (
@@ -206,6 +274,13 @@ export function DeliverablesTable({
                     key={item.id}
                     className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-muted/30"
                   >
+                    <input
+                      type="checkbox"
+                      checked={selectedForDeleteIds.has(item.id)}
+                      onChange={() => toggleSelectedForDelete(item.id)}
+                      className="size-3.5 shrink-0"
+                      aria-label={`Seleccionar "${item.titulo}"`}
+                    />
                     <span
                       className={cn(
                         "flex size-6 shrink-0 items-center justify-center rounded-md",
