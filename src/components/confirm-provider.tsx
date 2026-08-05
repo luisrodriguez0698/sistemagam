@@ -51,6 +51,11 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   function settle(value: boolean) {
     resolveRef.current?.(value);
     resolveRef.current = null;
+    // El AlertDialog es controlado (`open={state.open}`) — resolver la
+    // promesa le avisa a quien llamó `confirm()` qué eligió el usuario,
+    // pero eso por sí solo no cierra el diálogo. Sin esto, tanto "Cancelar"
+    // como "Eliminar" dejaban el diálogo visualmente abierto.
+    setState((prev) => ({ ...prev, open: false }));
   }
 
   return (
