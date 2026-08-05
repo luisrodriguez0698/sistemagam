@@ -25,6 +25,26 @@ export function findStatus(statuses: PipelineStatusOption[], statusId: string): 
   return statuses.find((s) => s.id === statusId);
 }
 
+// Paleta compartida entre el drawer de "Gestionar estatus" y el botón
+// rápido de "Agregar columna" del Tablero — mismos colores en los dos
+// lugares donde se puede crear/editar un estatus.
+export const COLOR_PALETTE = [
+  "#ef4444",
+  "#f97316",
+  "#f59e0b",
+  "#84cc16",
+  "#22c55e",
+  "#10b981",
+  "#14b8a6",
+  "#06b6d4",
+  "#3b82f6",
+  "#6366f1",
+  "#8b5cf6",
+  "#a855f7",
+  "#ec4899",
+  "#f43f5e",
+];
+
 // Las 4 columnas con las que arranca toda agencia nueva — el usuario puede
 // agregar más encima, pero estas siempre existen (se pueden renombrar y
 // recolorear, no borrar). Mismos valores que se usaron para el backfill de

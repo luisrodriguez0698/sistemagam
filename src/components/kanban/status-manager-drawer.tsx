@@ -16,24 +16,7 @@ import {
   reorderPipelineStatuses,
   updatePipelineStatus,
 } from "@/actions/pipeline-statuses";
-import type { PipelineStatusOption } from "@/lib/pipeline-status";
-
-const COLOR_PALETTE = [
-  "#ef4444",
-  "#f97316",
-  "#f59e0b",
-  "#84cc16",
-  "#22c55e",
-  "#10b981",
-  "#14b8a6",
-  "#06b6d4",
-  "#3b82f6",
-  "#6366f1",
-  "#8b5cf6",
-  "#a855f7",
-  "#ec4899",
-  "#f43f5e",
-];
+import { COLOR_PALETTE, type PipelineStatusOption } from "@/lib/pipeline-status";
 
 interface StatusManagerDrawerProps {
   open: boolean;

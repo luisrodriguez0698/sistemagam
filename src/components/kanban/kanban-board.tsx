@@ -14,13 +14,16 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { arrayMove } from "@dnd-kit/sortable";
+import { arrayMove, horizontalListSortingStrategy, SortableContext } from "@dnd-kit/sortable";
 import { cn } from "@/lib/utils";
 import { KanbanColumn } from "./kanban-column";
+import { AddColumnButton } from "./add-column-button";
 import { DeliverableCard } from "./deliverable-card";
 import { DeliverableDrawer } from "./deliverable-drawer";
 import { KanbanFilters } from "./kanban-filters";
+import { columnDragId, isColumnDragId, statusIdFromColumnDragId } from "./column-drag-id";
 import { moveDeliverable } from "@/actions/deliverables";
+import { reorderPipelineStatuses } from "@/actions/pipeline-statuses";
 import type { ClientFilterOption } from "./kanban-filters";
 import type { PipelineStatusOption } from "@/lib/pipeline-status";
 import type { DeliverableType, ExtraPaymentStatus } from "@prisma/client";
@@ -84,9 +87,21 @@ interface KanbanBoardProps {
 // sí detecta columnas vacías de forma confiable. Se usa como estrategia
 // principal y `rectIntersection` como respaldo si el cursor no cae dentro
 // de ningún droppable (ej. arrastre muy rápido).
+//
+// Se filtran los droppables por "tipo" antes de correr esa estrategia:
+// arrastrar una TARJETA nunca debe poder resolver como "over" la zona
+// sortable de una COLUMNA (id con prefijo `column:`) y viceversa — sin este
+// filtro, un arrastre de columna que pasa por encima del área de tarjetas de
+// otra columna (que están anidadas adentro, mismo rectángulo en pantalla)
+// podía resolver el "over" contra una tarjeta suelta en vez de la columna.
 const collisionDetectionStrategy: CollisionDetection = (args) => {
-  const pointerCollisions = pointerWithin(args);
-  return pointerCollisions.length > 0 ? pointerCollisions : rectIntersection(args);
+  const draggingColumn = isColumnDragId(String(args.active.id));
+  const droppableContainers = args.droppableContainers.filter((container) =>
+    isColumnDragId(String(container.id)) === draggingColumn
+  );
+  const filteredArgs = { ...args, droppableContainers };
+  const pointerCollisions = pointerWithin(filteredArgs);
+  return pointerCollisions.length > 0 ? pointerCollisions : rectIntersection(filteredArgs);
 };
 
 export type SortMode = "MANUAL" | "NOMBRE" | "TIPO";
@@ -145,7 +160,9 @@ export function KanbanBoard({
   const [columns, setColumns] = React.useState<Record<string, DeliverableCardData[]>>(
     () => groupByStatus(initialDeliverables, statuses)
   );
+  const [orderedStatuses, setOrderedStatuses] = React.useState<PipelineStatusOption[]>(statuses);
   const [activeCard, setActiveCard] = React.useState<DeliverableCardData | null>(null);
+  const [activeStatusId, setActiveStatusId] = React.useState<string | null>(null);
   const [selectedCard, setSelectedCard] = React.useState<DeliverableCardData | null>(null);
   const [drawerOpen, setDrawerOpen] = React.useState(false);
 
@@ -156,6 +173,14 @@ export function KanbanBoard({
   React.useEffect(() => {
     setColumns(groupByStatus(initialDeliverables, statuses));
   }, [initialDeliverables, statuses]);
+
+  // Mismo criterio que arriba, pero para el ORDEN de las columnas: se
+  // reordenan localmente al soltar (optimista) y luego se resincroniza con
+  // lo que confirme el servidor (ej. si otra persona reordenó al mismo
+  // tiempo, o al agregar una columna nueva desde "Agregar columna").
+  React.useEffect(() => {
+    setOrderedStatuses(statuses);
+  }, [statuses]);
 
   function isCardVisible(deliverable: DeliverableCardData) {
     return (
@@ -183,9 +208,34 @@ export function KanbanBoard({
 
   function handleDragStart(event: DragStartEvent) {
     const id = String(event.active.id);
+
+    if (isColumnDragId(id)) {
+      setActiveStatusId(statusIdFromColumnDragId(id));
+      return;
+    }
+
     const status = findColumnOf(id);
     if (!status) return;
     setActiveCard(columns[status].find((c) => c.id === id) ?? null);
+  }
+
+  function handleColumnDragEnd(activeId: string, overId: string) {
+    if (!isColumnDragId(overId)) return;
+
+    const fromStatusId = statusIdFromColumnDragId(activeId);
+    const toStatusId = statusIdFromColumnDragId(overId);
+    if (fromStatusId === toStatusId) return;
+
+    const oldIndex = orderedStatuses.findIndex((s) => s.id === fromStatusId);
+    const newIndex = orderedStatuses.findIndex((s) => s.id === toStatusId);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reordered = arrayMove(orderedStatuses, oldIndex, newIndex);
+    setOrderedStatuses(reordered);
+
+    // Server Action optimista, igual que al mover una tarjeta: no se espera
+    // la respuesta para reflejar el nuevo orden en pantalla.
+    void reorderPipelineStatuses({ orderedIds: reordered.map((s) => s.id) });
   }
 
   // Todo el cálculo de cruce/reordenamiento de columnas vive en
@@ -196,16 +246,22 @@ export function KanbanBoard({
   // loop de setState que termina en "Maximum update depth exceeded".
   function handleDragEnd(event: DragEndEvent) {
     setActiveCard(null);
+    setActiveStatusId(null);
     const { active, over } = event;
     if (!over) return;
 
     const activeId = String(active.id);
     const overId = String(over.id);
 
+    if (isColumnDragId(activeId)) {
+      handleColumnDragEnd(activeId, overId);
+      return;
+    }
+
     const fromStatus = findColumnOf(activeId);
     if (!fromStatus) return;
 
-    const toStatus = statuses.find((s) => s.id === overId)?.id ?? findColumnOf(overId);
+    const toStatus = orderedStatuses.find((s) => s.id === overId)?.id ?? findColumnOf(overId);
     if (!toStatus) return;
 
     const sourceItems = columns[fromStatus];
@@ -326,21 +382,29 @@ export function KanbanBoard({
               la siguiente) para que el swipe horizontal se sienta como un
               carrusel; en sm+ vuelve al ancho fijo original de varias
               columnas visibles a la vez. */}
-          {statuses.map((status) => (
-            <KanbanColumn
-              key={status.id}
-              id={status.id}
-              title={status.nombre}
-              color={status.color}
-              items={sortItems(columns[status.id] ?? [], sortMode)}
-              onCardClick={handleCardClick}
-              isVisible={isCardVisible}
-            />
-          ))}
+          <SortableContext
+            items={orderedStatuses.map((s) => columnDragId(s.id))}
+            strategy={horizontalListSortingStrategy}
+          >
+            {orderedStatuses.map((status) => (
+              <KanbanColumn
+                key={status.id}
+                id={status.id}
+                title={status.nombre}
+                color={status.color}
+                items={sortItems(columns[status.id] ?? [], sortMode)}
+                onCardClick={handleCardClick}
+                isVisible={isCardVisible}
+              />
+            ))}
+          </SortableContext>
+
+          <AddColumnButton />
         </div>
 
         <DragOverlay>
           {activeCard ? <DeliverableCard deliverable={activeCard} onClick={() => {}} /> : null}
+          {activeStatusId ? <ColumnDragPreview status={orderedStatuses.find((s) => s.id === activeStatusId)} /> : null}
         </DragOverlay>
       </DndContext>
 
@@ -351,9 +415,20 @@ export function KanbanBoard({
         onSaved={handleSaved}
         onDeleted={handleDeleted}
         bankAccounts={bankAccounts}
-        statuses={statuses}
+        statuses={orderedStatuses}
       />
     </>
+  );
+}
+
+/** Vista fantasma que sigue al cursor mientras se arrastra una columna. */
+function ColumnDragPreview({ status }: { status: PipelineStatusOption | undefined }) {
+  if (!status) return null;
+  return (
+    <div className="flex w-[82vw] items-center gap-2 rounded-2xl bg-muted/40 px-3 py-3 shadow-lg sm:w-72 md:w-80">
+      <span className="size-2 rounded-full" style={{ backgroundColor: status.color }} aria-hidden />
+      <h3 className="text-sm font-semibold">{status.nombre}</h3>
+    </div>
   );
 }
 

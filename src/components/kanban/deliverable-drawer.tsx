@@ -66,8 +66,16 @@ export function DeliverableDrawer({
     });
   }
 
+  // Depende de `open` + el ID (no del objeto `deliverable` completo): subir/
+  // quitar la imagen de referencia actualiza ese objeto en el padre para
+  // reflejarla al instante (ver `DeliverableImageUpload`) mientras el Drawer
+  // sigue abierto, y eso NO debe repintar el resto del formulario y borrar
+  // lo que el usuario ya haya escrito y no guardado. Los campos se vuelven a
+  // cargar únicamente al ABRIR el Drawer (mismo entregable o uno distinto),
+  // que es cuando sí queremos descartar cualquier cosa sin guardar de una
+  // sesión de edición anterior.
   React.useEffect(() => {
-    if (!deliverable) return;
+    if (!open || !deliverable) return;
     setTitulo(deliverable.titulo);
     setDescripcion(deliverable.descripcion ?? "");
     setFechaEntrega(deliverable.fechaEntrega ? deliverable.fechaEntrega.slice(0, 10) : "");
@@ -79,7 +87,8 @@ export function DeliverableDrawer({
     setGuion(deliverable.guion ?? "");
     setBankAccountId("");
     setError(null);
-  }, [deliverable]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, deliverable?.id]);
 
   if (!deliverable) return null;
 

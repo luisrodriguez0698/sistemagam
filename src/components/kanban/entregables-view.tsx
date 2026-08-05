@@ -60,6 +60,14 @@ export function EntregablesView({
   const [tipoFilter, setTipoFilter] = React.useState<DeliverableType | "ALL">("ALL");
   const [sortMode, setSortMode] = React.useState<SortMode>("MANUAL");
 
+  // IDs de cliente que ya conocíamos en algún render anterior. `deliverables`
+  // llega con una referencia nueva cada vez que el servidor revalida (ej. al
+  // guardar un entregable), así que `clientOptions` también cambia de
+  // referencia aunque el conjunto de clientes sea el mismo — sin esta
+  // referencia iríamos a ciegas y no podríamos distinguir "cliente nuevo"
+  // de "cliente que el usuario desmarcó a propósito".
+  const knownClientIdsRef = React.useRef<Set<string>>(new Set(clientOptions.map((c) => c.id)));
+
   // Si aparece un cliente nuevo en la lista (ej. se le crea su primer
   // entregable del mes), se agrega ya marcado por defecto, sin resetear la
   // selección que el usuario ya haya hecho para los demás.
@@ -68,13 +76,14 @@ export function EntregablesView({
       const next = new Set(prev);
       let changed = false;
       for (const c of clientOptions) {
-        if (!next.has(c.id)) {
+        if (!knownClientIdsRef.current.has(c.id)) {
           next.add(c.id);
           changed = true;
         }
       }
       return changed ? next : prev;
     });
+    knownClientIdsRef.current = new Set(clientOptions.map((c) => c.id));
   }, [clientOptions]);
 
   function toggleClient(clientId: string) {

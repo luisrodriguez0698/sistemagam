@@ -34,9 +34,15 @@ export function DeliverableCard({ deliverable, onClick }: DeliverableCardProps) 
       {...listeners}
       onClick={onClick}
       className={cn(
-        "cursor-grab space-y-2 rounded-xl border border-l-4 bg-card p-3 text-card-foreground shadow-sm transition-shadow active:cursor-grabbing",
-        "hover:shadow-md",
-        isDragging && "opacity-50 shadow-lg"
+        // Cursor "pointer" por defecto (la tarjeta es clicable — abre el
+        // modal), y solo cambia a "grabbing" mientras el mouse está
+        // presionado o dnd-kit confirma que el arrastre arrancó. Antes
+        // mostraba la manita de arrastre todo el tiempo, lo cual sugería
+        // que solo se podía arrastrar y escondía que también se puede
+        // hacer click.
+        "cursor-pointer space-y-2 rounded-xl border border-l-4 bg-card p-3 text-card-foreground shadow-sm transition-all duration-150 active:cursor-grabbing",
+        "hover:-translate-y-0.5 hover:shadow-lg",
+        isDragging && "cursor-grabbing opacity-50 shadow-lg"
       )}
     >
       {deliverable.archivoUrl && (
