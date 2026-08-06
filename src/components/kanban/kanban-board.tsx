@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import {
   DndContext,
   DragOverlay,
@@ -22,8 +23,9 @@ import { DeliverableCard } from "./deliverable-card";
 import { DeliverableDrawer } from "./deliverable-drawer";
 import { KanbanFilters } from "./kanban-filters";
 import { columnDragId, isColumnDragId, statusIdFromColumnDragId } from "./column-drag-id";
-import { moveDeliverable } from "@/actions/deliverables";
+import { duplicateDeliverable, moveDeliverable } from "@/actions/deliverables";
 import { reorderPipelineStatuses } from "@/actions/pipeline-statuses";
+import { useConfirm } from "@/components/confirm-provider";
 import type { ClientFilterOption } from "./kanban-filters";
 import type { PipelineStatusOption } from "@/lib/pipeline-status";
 import type { DeliverableType, ExtraPaymentStatus } from "@prisma/client";
@@ -38,8 +40,9 @@ export type DeliverableCardData = {
   clientId: string;
   clienteNombre: string;
   clienteColor: string;
-  linkEjemplo?: string | null;
+  linksEjemplo: string[];
   archivoUrl?: string | null;
+  imagenEjemploUrl?: string | null;
   copy?: string | null;
   guion?: string | null;
   orden: number;
@@ -157,6 +160,9 @@ export function KanbanBoard({
   sortMode,
   onSortModeChange,
 }: KanbanBoardProps) {
+  const router = useRouter();
+  const confirm = useConfirm();
+  const [, startDuplicateTransition] = React.useTransition();
   const [columns, setColumns] = React.useState<Record<string, DeliverableCardData[]>>(
     () => groupByStatus(initialDeliverables, statuses)
   );
@@ -336,6 +342,19 @@ export function KanbanBoard({
     });
   }
 
+  async function handleDuplicate(deliverable: DeliverableCardData) {
+    const ok = await confirm({
+      title: `¿Duplicar "${deliverable.titulo}"?`,
+      description: "Se crea una copia al final de la misma columna, sin las imágenes — súbelas de nuevo si aplica.",
+      confirmText: "Duplicar",
+    });
+    if (!ok) return;
+    startDuplicateTransition(async () => {
+      await duplicateDeliverable(deliverable.id);
+      router.refresh();
+    });
+  }
+
   return (
     <>
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -394,6 +413,7 @@ export function KanbanBoard({
                 color={status.color}
                 items={sortItems(columns[status.id] ?? [], sortMode)}
                 onCardClick={handleCardClick}
+                onCardDuplicate={handleDuplicate}
                 isVisible={isCardVisible}
               />
             ))}

@@ -7,6 +7,7 @@ import {
   ChevronDownIcon,
   ChevronsDownUpIcon,
   ChevronsUpDownIcon,
+  CopyPlusIcon,
   DownloadIcon,
   LinkIcon,
   PlusIcon,
@@ -15,7 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useConfirm } from "@/components/confirm-provider";
-import { deleteDeliverable, deleteDeliverables } from "@/actions/deliverables";
+import { deleteDeliverable, deleteDeliverables, duplicateDeliverable } from "@/actions/deliverables";
 import { DeliverableDrawer } from "./deliverable-drawer";
 import { NewDeliverableDrawer } from "./new-deliverable-drawer";
 import { ExportDrawer } from "./export-drawer";
@@ -94,6 +95,19 @@ export function DeliverablesTable({
     if (!ok) return;
     startTransition(async () => {
       await deleteDeliverable(deliverable.id);
+      router.refresh();
+    });
+  }
+
+  async function handleDuplicate(deliverable: DeliverableCardData) {
+    const ok = await confirm({
+      title: `¿Duplicar "${deliverable.titulo}"?`,
+      description: "Se crea una copia al final de la misma columna, sin las imágenes — súbelas de nuevo si aplica.",
+      confirmText: "Duplicar",
+    });
+    if (!ok) return;
+    startTransition(async () => {
+      await duplicateDeliverable(deliverable.id);
       router.refresh();
     });
   }
@@ -307,14 +321,19 @@ export function DeliverablesTable({
                       {item.titulo}
                     </button>
 
-                    {item.linkEjemplo && (
+                    {item.linksEjemplo.length > 0 && (
                       <a
-                        href={item.linkEjemplo}
+                        href={item.linksEjemplo[0]}
                         target="_blank"
                         rel="noreferrer"
                         onClick={(e) => e.stopPropagation()}
                         className="shrink-0 text-muted-foreground hover:text-foreground"
-                        aria-label="Abrir link de ejemplo"
+                        aria-label={
+                          item.linksEjemplo.length > 1
+                            ? `Abrir el primero de ${item.linksEjemplo.length} links de ejemplo`
+                            : "Abrir link de ejemplo"
+                        }
+                        title={item.linksEjemplo.length > 1 ? `${item.linksEjemplo.length} links de ejemplo` : undefined}
                       >
                         <LinkIcon className="size-4" />
                       </a>
@@ -362,6 +381,15 @@ export function DeliverablesTable({
                         </span>
                       );
                     })()}
+
+                    <button
+                      onClick={() => handleDuplicate(item)}
+                      className="shrink-0 text-muted-foreground hover:text-foreground"
+                      aria-label="Duplicar entregable"
+                      title="Duplicar"
+                    >
+                      <CopyPlusIcon className="size-4" />
+                    </button>
 
                     <button
                       onClick={() => handleDelete(item)}

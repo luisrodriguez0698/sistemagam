@@ -7,11 +7,14 @@ import { useRouter } from "next/navigation";
 import { ImageUpIcon, Loader2Icon, XIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { compressImage } from "@/lib/compress-image";
-import { removeDeliverableImage, uploadDeliverableImage } from "@/actions/deliverables";
 
 interface DeliverableImageUploadProps {
   deliverableId: string;
   imageUrl?: string | null;
+  /** Título mostrado arriba de la zona de subida, ej. "Imagen de entregable". */
+  label: string;
+  uploadAction: (deliverableId: string, formData: FormData) => Promise<{ url: string }>;
+  removeAction: (deliverableId: string) => Promise<void>;
   /**
    * El padre (Drawer) mantiene su propia copia local del entregable para
    * mostrarlo mientras el Drawer sigue abierto; `router.refresh()` solo
@@ -24,13 +27,18 @@ interface DeliverableImageUploadProps {
 }
 
 /**
- * Zona para subir (click, arrastrar, o pegar con Ctrl+V) la imagen de
- * referencia de un entregable. La imagen sube a Cloudflare R2 vía Server
- * Action; aquí solo se maneja la interacción — no se conoce nada de R2.
+ * Zona para subir (click, arrastrar, o pegar con Ctrl+V) una imagen de un
+ * entregable. La imagen sube a Cloudflare R2 vía la Server Action que se le
+ * pase (`uploadAction`/`removeAction`) — el mismo componente sirve tanto
+ * para la imagen del entregable ya hecho como para la imagen de ejemplo,
+ * cada una con su propia acción/columna en la base de datos.
  */
 export function DeliverableImageUpload({
   deliverableId,
   imageUrl,
+  label,
+  uploadAction,
+  removeAction,
   onUploaded,
   onRemoved,
 }: DeliverableImageUploadProps) {
@@ -40,6 +48,11 @@ export function DeliverableImageUpload({
   const [isDraggingOver, setIsDraggingOver] = React.useState(false);
   const [previewOpen, setPreviewOpen] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
+  // Cuando hay más de una zona de este tipo en el mismo formulario (imagen
+  // de entregable + imagen de ejemplo), un paste global sin más pegaría en
+  // AMBAS a la vez. Se limita a la zona que el mouse esté tocando en ese
+  // momento — sigue sin requerir click previo, solo estar encima.
+  const isHoveredRef = React.useRef(false);
 
   function upload(file: File) {
     setError(null);
@@ -48,7 +61,7 @@ export function DeliverableImageUpload({
         const compressed = await compressImage(file);
         const formData = new FormData();
         formData.set("file", compressed);
-        const { url } = await uploadDeliverableImage(deliverableId, formData);
+        const { url } = await uploadAction(deliverableId, formData);
         onUploaded(url);
         router.refresh();
       } catch (err) {
@@ -66,12 +79,11 @@ export function DeliverableImageUpload({
   // Pegar (Ctrl+V) sin necesidad de darle click antes a la zona de subida:
   // el navegador solo dispara "paste" sobre el elemento con foco, así que
   // antes había que pre-seleccionar el div antes de pegar. Escuchando a
-  // nivel de documento mientras el Drawer está abierto, Ctrl+V funciona
-  // desde cualquier parte (siempre que el portapapeles tenga una imagen; si
-  // no la tiene, no hace nada y no interfiere con pegar texto en otros
-  // campos).
+  // nivel de documento mientras el Drawer está abierto, Ctrl+V funciona con
+  // solo tener el mouse encima (ver `isHoveredRef` arriba).
   React.useEffect(() => {
     function handleGlobalPaste(e: ClipboardEvent) {
+      if (!isHoveredRef.current) return;
       const item = Array.from(e.clipboardData?.items ?? []).find((i) => i.type.startsWith("image/"));
       const file = item?.getAsFile();
       if (file) uploadRef.current(file);
@@ -83,7 +95,7 @@ export function DeliverableImageUpload({
   function handleRemove() {
     setError(null);
     startTransition(async () => {
-      await removeDeliverableImage(deliverableId);
+      await removeAction(deliverableId);
       onRemoved();
       router.refresh();
     });
@@ -120,13 +132,17 @@ export function DeliverableImageUpload({
 
   if (imageUrl) {
     return (
-      <div className="space-y-1.5">
-        <p className="text-sm font-medium">Imagen de referencia</p>
+      <div
+        className="space-y-1.5"
+        onMouseEnter={() => (isHoveredRef.current = true)}
+        onMouseLeave={() => (isHoveredRef.current = false)}
+      >
+        <p className="text-sm font-medium">{label}</p>
         <div className="group relative w-40 overflow-hidden rounded-lg border">
           {/* eslint-disable-next-line @next/next/no-img-element -- imagen externa (R2), no optimizable por next/image sin configurar dominio remoto */}
           <img
             src={imageUrl}
-            alt="Referencia del entregable"
+            alt={label}
             onClick={() => setPreviewOpen(true)}
             className="aspect-square w-full cursor-zoom-in object-cover"
           />
@@ -159,7 +175,7 @@ export function DeliverableImageUpload({
               {/* eslint-disable-next-line @next/next/no-img-element -- imagen externa (R2) */}
               <img
                 src={imageUrl}
-                alt="Referencia del entregable (tamaño completo)"
+                alt={`${label} (tamaño completo)`}
                 className="max-h-[85vh] max-w-[90vw] cursor-zoom-out rounded-lg object-contain shadow-2xl"
               />
             </div>,
@@ -170,8 +186,12 @@ export function DeliverableImageUpload({
   }
 
   return (
-    <div className="space-y-1.5">
-      <p className="text-sm font-medium">Imagen de referencia</p>
+    <div
+      className="space-y-1.5"
+      onMouseEnter={() => (isHoveredRef.current = true)}
+      onMouseLeave={() => (isHoveredRef.current = false)}
+    >
+      <p className="text-sm font-medium">{label}</p>
       <div
         tabIndex={0}
         onDragOver={(e) => {

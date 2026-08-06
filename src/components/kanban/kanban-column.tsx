@@ -15,13 +15,14 @@ interface KanbanColumnProps {
   color: string;
   items: DeliverableCardData[];
   onCardClick: (deliverable: DeliverableCardData) => void;
+  onCardDuplicate: (deliverable: DeliverableCardData) => void;
   /** Tarjetas que no matchean los filtros activos se ocultan con CSS en vez
    *  de quitarse del arreglo, para no desalinear los índices que usa
    *  dnd-kit al calcular dónde soltar una tarjeta. */
   isVisible: (deliverable: DeliverableCardData) => boolean;
 }
 
-export function KanbanColumn({ id, title, color, items, onCardClick, isVisible }: KanbanColumnProps) {
+export function KanbanColumn({ id, title, color, items, onCardClick, onCardDuplicate, isVisible }: KanbanColumnProps) {
   // La columna en sí es "sortable" (para reordenarla arrastrando el
   // encabezado) con un id prefijado (`columnDragId`) DISTINTO al id que usa
   // el droppable de tarjetas de abajo — si compartieran el mismo id, dnd-kit
@@ -70,7 +71,11 @@ export function KanbanColumn({ id, title, color, items, onCardClick, isVisible }
         <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
           {items.map((deliverable) => (
             <div key={deliverable.id} className={cn(!isVisible(deliverable) && "hidden")}>
-              <DeliverableCard deliverable={deliverable} onClick={() => onCardClick(deliverable)} />
+              <DeliverableCard
+                deliverable={deliverable}
+                onClick={() => onCardClick(deliverable)}
+                onDuplicate={() => onCardDuplicate(deliverable)}
+              />
             </div>
           ))}
         </SortableContext>

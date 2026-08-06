@@ -1,11 +1,12 @@
-import { Document, Link, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
+import { Document, Image, Link, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
 
 export interface ContentGridRow {
   numero: string; // ej. "Diseño 1", "Video 3", "Logo 1"
   titulo: string;
   descripcion?: string | null;
   fechaEntrega?: string | null; // ya formateada, ej. "17/06/2026"
-  link?: string | null;
+  links: string[];
+  imagenEjemploUrl?: string | null;
 }
 
 export interface ContentGridSection {
@@ -44,12 +45,14 @@ const styles = StyleSheet.create({
   headCell: { padding: 8, fontSize: 9, fontWeight: 700, color: "#ffffff" },
   row: { flexDirection: "row", borderTopWidth: 1, borderTopColor: "#e5e7eb" },
   cell: { padding: 8, fontSize: 9, color: "#374151", justifyContent: "center" },
-  numCol: { width: "12%", backgroundColor: "#f0fdf4" },
-  tituloCol: { width: "19%" },
-  descCol: { width: "33%" },
-  fechaCol: { width: "14%" },
-  linkCol: { width: "22%" },
-  linkText: { color: "#2563eb", textDecoration: "underline" },
+  numCol: { width: "9%", backgroundColor: "#f0fdf4" },
+  tituloCol: { width: "16%" },
+  descCol: { width: "26%" },
+  fechaCol: { width: "11%" },
+  linkCol: { width: "18%" },
+  imagenCol: { width: "20%", alignItems: "center", justifyContent: "center" },
+  linkText: { color: "#2563eb", textDecoration: "underline", marginBottom: 2 },
+  exampleImage: { width: 48, height: 48, objectFit: "cover", borderRadius: 3 },
   emptyText: { fontSize: 9, color: "#9ca3af", fontStyle: "italic", padding: 8 },
   footerBadge: {
     alignSelf: "center",
@@ -80,7 +83,8 @@ function GridTable({ rows }: { rows: ContentGridRow[] }) {
         <Text style={[styles.headCell, styles.tituloCol]}>TÍTULO</Text>
         <Text style={[styles.headCell, styles.descCol]}>DESCRIPCIÓN</Text>
         <Text style={[styles.headCell, styles.fechaCol]}>FECHA DE ENTREGA</Text>
-        <Text style={[styles.headCell, styles.linkCol]}>LINK DE EJEMPLO</Text>
+        <Text style={[styles.headCell, styles.linkCol]}>LINKS DE EJEMPLO</Text>
+        <Text style={[styles.headCell, styles.imagenCol]}>IMAGEN DE EJEMPLO</Text>
       </View>
       {rows.map((row, index) => (
         <View key={index} style={styles.row} wrap={false}>
@@ -88,12 +92,23 @@ function GridTable({ rows }: { rows: ContentGridRow[] }) {
           <Text style={[styles.cell, styles.tituloCol]}>{row.titulo}</Text>
           <Text style={[styles.cell, styles.descCol]}>{row.descripcion || "—"}</Text>
           <Text style={[styles.cell, styles.fechaCol]}>{row.fechaEntrega || "—"}</Text>
-          {row.link ? (
-            <Link src={row.link} style={[styles.cell, styles.linkCol, styles.linkText]}>
-              Ver ejemplo
-            </Link>
+          {row.links.length > 0 ? (
+            <View style={[styles.cell, styles.linkCol]}>
+              {row.links.map((link, linkIndex) => (
+                <Link key={linkIndex} src={link} style={styles.linkText}>
+                  {row.links.length > 1 ? `Ver ejemplo ${linkIndex + 1}` : "Ver ejemplo"}
+                </Link>
+              ))}
+            </View>
           ) : (
             <Text style={[styles.cell, styles.linkCol]}>—</Text>
+          )}
+          {row.imagenEjemploUrl ? (
+            <View style={[styles.cell, styles.imagenCol]}>
+              <Image src={row.imagenEjemploUrl} style={styles.exampleImage} />
+            </View>
+          ) : (
+            <Text style={[styles.cell, styles.imagenCol]}>—</Text>
           )}
         </View>
       ))}

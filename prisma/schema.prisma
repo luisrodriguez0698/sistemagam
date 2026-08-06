@@ -241,16 +241,23 @@ model Deliverable {
   statusId     String
   status       PipelineStatus  @relation(fields: [statusId], references: [id], onDelete: Restrict)
   fechaEntrega DateTime?
-  // URL pública (r2.dev) de la miniatura subida a Cloudflare R2, para
-  // mostrarla en el Kanban/Parrilla y embeberla en el PDF de resumen
-  // mensual. `archivoKey` es el object key en el bucket — se necesita
-  // aparte para poder borrar/reemplazar el archivo en R2 (no se puede
-  // reconstruir de forma confiable solo a partir de la URL pública).
+  // URL pública (r2.dev) de la imagen del entregable YA HECHO, subida a
+  // Cloudflare R2, para mostrarla en el Kanban/Parrilla y embeberla en el
+  // PDF de resumen mensual (la prueba de lo que se entregó). `archivoKey`
+  // es el object key en el bucket — se necesita aparte para poder
+  // borrar/reemplazar el archivo en R2 (no se puede reconstruir de forma
+  // confiable solo a partir de la URL pública).
   archivoUrl   String?
   archivoKey   String?
-  // Link de referencia (ej. video/diseño de ejemplo en Drive, Canva, etc.)
-  // que se muestra en la parrilla y en el resumen descargable.
-  linkEjemplo  String?
+  // Imagen de EJEMPLO/referencia (inspiración para producir el contenido,
+  // antes de hacerlo) — a diferencia de `archivoUrl` (lo que ya se hizo),
+  // esta se muestra junto a los links de ejemplo en el PDF de Parrilla
+  // (planeación), nunca en el Resumen.
+  imagenEjemploUrl String?
+  imagenEjemploKey String?
+  // Links de referencia (ej. video/diseño de ejemplo en Drive, Canva, etc.)
+  // que se muestran en la parrilla descargable — pueden ser varios.
+  linksEjemplo String[] @default([])
   // Texto de copy para la publicación (redes sociales). A propósito NUNCA
   // se incluye en los PDF descargables (ni la parrilla de planeación ni el
   // resumen mensual) — es solo para uso interno del equipo, no para el cliente.

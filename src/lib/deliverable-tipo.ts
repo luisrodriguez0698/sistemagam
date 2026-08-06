@@ -62,6 +62,14 @@ export const TIPO_ACCENT: Record<DeliverableType, { hex: string; badgeClassName:
   },
 };
 
+/** Convierte un hex de 6 dígitos (ej. de `TIPO_ACCENT[...].hex`) a un `rgba(...)` con la opacidad dada — para sombras/glows de color dinámico que Tailwind no puede expresar sin arbitrary values. */
+export function hexToRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 // Encabezados de sección para los PDF de Parrilla/Resumen — Diseño/Video
 // conservan exactamente el texto que ya tenían (plural) para no cambiar el
 // PDF que ya le mandas a tus clientes; los tipos nuevos usan su nombre tal

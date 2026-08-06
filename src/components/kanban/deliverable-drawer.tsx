@@ -15,14 +15,34 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { deleteDeliverable, updateDeliverableDetails } from "@/actions/deliverables";
+import {
+  deleteDeliverable,
+  removeDeliverableExampleImage,
+  removeDeliverableImage,
+  updateDeliverableDetails,
+  uploadDeliverableExampleImage,
+  uploadDeliverableImage,
+} from "@/actions/deliverables";
 import { ExtraPaymentStatus } from "@prisma/client";
 import type { BankAccountOption, DeliverableCardData } from "./kanban-board";
 import { DeliverableImageUpload } from "./deliverable-image-upload";
-import { CheckIcon, CopyIcon } from "lucide-react";
+import { CheckIcon, CopyIcon, ExternalLinkIcon, PlusIcon, XIcon } from "lucide-react";
 import { TIPO_LABEL } from "@/lib/deliverable-tipo";
 import type { PipelineStatusOption } from "@/lib/pipeline-status";
 import { useConfirm } from "@/components/confirm-provider";
+
+/** Copia texto al portapapeles y expone un flag que se prende ~1.5s para dar feedback visual ("Copiado"). */
+function useCopyToClipboard() {
+  const [copied, setCopied] = React.useState(false);
+  const copyText = React.useCallback((text: string) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }, []);
+  return { copied, copyText };
+}
 
 interface DeliverableDrawerProps {
   deliverable: DeliverableCardData | null;
@@ -53,17 +73,22 @@ export function DeliverableDrawer({
   const [montoExtra, setMontoExtra] = React.useState("");
   const [estatusPagoExtra, setEstatusPagoExtra] = React.useState<ExtraPaymentStatus>("PENDIENTE");
   const [bankAccountId, setBankAccountId] = React.useState("");
-  const [linkEjemplo, setLinkEjemplo] = React.useState("");
+  const [linksEjemplo, setLinksEjemplo] = React.useState<string[]>([]);
   const [copy, setCopy] = React.useState("");
   const [guion, setGuion] = React.useState("");
-  const [copied, setCopied] = React.useState(false);
+  const { copied: copiedCopy, copyText: copyCopyText } = useCopyToClipboard();
+  const { copied: copiedGuion, copyText: copyGuionText } = useCopyToClipboard();
 
-  function handleCopyToClipboard() {
-    if (!copy) return;
-    navigator.clipboard.writeText(copy).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
+  function updateLink(index: number, value: string) {
+    setLinksEjemplo((prev) => prev.map((link, i) => (i === index ? value : link)));
+  }
+
+  function addLink() {
+    setLinksEjemplo((prev) => [...prev, ""]);
+  }
+
+  function removeLink(index: number) {
+    setLinksEjemplo((prev) => (prev.length === 1 ? [""] : prev.filter((_, i) => i !== index)));
   }
 
   // Depende de `open` + el ID (no del objeto `deliverable` completo): subir/
@@ -82,7 +107,7 @@ export function DeliverableDrawer({
     setStatusId(deliverable.statusId);
     setMontoExtra(deliverable.montoExtra != null ? String(deliverable.montoExtra) : "");
     setEstatusPagoExtra(deliverable.estatusPagoExtra ?? "PENDIENTE");
-    setLinkEjemplo(deliverable.linkEjemplo ?? "");
+    setLinksEjemplo(deliverable.linksEjemplo.length > 0 ? deliverable.linksEjemplo : [""]);
     setCopy(deliverable.copy ?? "");
     setGuion(deliverable.guion ?? "");
     setBankAccountId("");
@@ -107,6 +132,8 @@ export function DeliverableDrawer({
       return;
     }
 
+    const cleanedLinks = linksEjemplo.map((link) => link.trim()).filter(Boolean);
+
     startTransition(async () => {
       try {
         await updateDeliverableDetails({
@@ -114,7 +141,7 @@ export function DeliverableDrawer({
           titulo,
           descripcion: descripcion || undefined,
           fechaEntrega: fechaEntrega ? new Date(fechaEntrega) : undefined,
-          linkEjemplo: linkEjemplo || undefined,
+          linksEjemplo: cleanedLinks,
           copy: copy || undefined,
           guion: deliverable!.tipo === "VIDEO" ? guion || undefined : undefined,
           statusId,
@@ -127,7 +154,7 @@ export function DeliverableDrawer({
           titulo,
           descripcion,
           fechaEntrega,
-          linkEjemplo,
+          linksEjemplo: cleanedLinks,
           copy,
           guion,
           statusId,
@@ -206,15 +233,57 @@ export function DeliverableDrawer({
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="linkEjemplo">Link de ejemplo (opcional)</Label>
-          <Input
-            id="linkEjemplo"
-            type="url"
-            placeholder="https://..."
-            value={linkEjemplo}
-            onChange={(e) => setLinkEjemplo(e.target.value)}
-          />
+          <div className="flex items-center justify-between">
+            <Label>Links de ejemplo (opcional)</Label>
+            <Button type="button" variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs" onClick={addLink}>
+              <PlusIcon className="size-3.5" />
+              Agregar link
+            </Button>
+          </div>
+          <div className="space-y-2">
+            {linksEjemplo.map((link, index) => (
+              <div key={index} className="flex items-center gap-1.5">
+                <Input
+                  type="url"
+                  placeholder="https://..."
+                  value={link}
+                  onChange={(e) => updateLink(index, e.target.value)}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0"
+                  disabled={!link.trim()}
+                  onClick={() => window.open(link.trim(), "_blank", "noopener,noreferrer")}
+                  aria-label="Abrir link"
+                >
+                  <ExternalLinkIcon className="size-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0 text-muted-foreground hover:text-destructive"
+                  onClick={() => removeLink(index)}
+                  aria-label="Quitar link"
+                >
+                  <XIcon className="size-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
         </div>
+
+        <DeliverableImageUpload
+          deliverableId={deliverable.id}
+          imageUrl={deliverable.imagenEjemploUrl}
+          label="Imagen de ejemplo (opcional)"
+          uploadAction={uploadDeliverableExampleImage}
+          removeAction={removeDeliverableExampleImage}
+          onUploaded={(url) => onSaved({ ...deliverable, imagenEjemploUrl: url })}
+          onRemoved={() => onSaved({ ...deliverable, imagenEjemploUrl: null })}
+        />
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
@@ -224,11 +293,11 @@ export function DeliverableDrawer({
               variant="ghost"
               size="sm"
               className="h-7 gap-1 px-2 text-xs"
-              onClick={handleCopyToClipboard}
+              onClick={() => copyCopyText(copy)}
               disabled={!copy}
             >
-              {copied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
-              {copied ? "Copiado" : "Copiar"}
+              {copiedCopy ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
+              {copiedCopy ? "Copiado al portapapeles" : "Copiar"}
             </Button>
           </div>
           <Textarea
@@ -246,7 +315,20 @@ export function DeliverableDrawer({
 
         {deliverable.tipo === "VIDEO" && (
           <div className="space-y-1.5">
-            <Label htmlFor="guion">Guion del video</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="guion">Guion del video</Label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1 px-2 text-xs"
+                onClick={() => copyGuionText(guion)}
+                disabled={!guion}
+              >
+                {copiedGuion ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
+                {copiedGuion ? "Copiado al portapapeles" : "Copiar"}
+              </Button>
+            </div>
             <Textarea
               id="guion"
               value={guion}
@@ -263,6 +345,9 @@ export function DeliverableDrawer({
         <DeliverableImageUpload
           deliverableId={deliverable.id}
           imageUrl={deliverable.archivoUrl}
+          label="Imagen de entregable"
+          uploadAction={uploadDeliverableImage}
+          removeAction={removeDeliverableImage}
           onUploaded={(url) => onSaved({ ...deliverable, archivoUrl: url })}
           onRemoved={() => onSaved({ ...deliverable, archivoUrl: null })}
         />

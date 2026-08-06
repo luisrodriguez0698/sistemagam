@@ -61,7 +61,7 @@ const updateDetailsSchema = z.object({
   titulo: z.string().min(1).max(120),
   descripcion: z.string().max(2000).optional(),
   fechaEntrega: z.coerce.date().optional(),
-  linkEjemplo: z.string().url().max(500).optional().or(z.literal("")),
+  linksEjemplo: z.array(z.string().url().max(500)).max(20).optional(),
   copy: z.string().max(5000).optional(),
   guion: z.string().max(20000).optional(),
   statusId: z.string().min(1),
@@ -127,7 +127,7 @@ export async function updateDeliverableDetails(input: z.infer<typeof updateDetai
         titulo: data.titulo,
         descripcion: data.descripcion,
         fechaEntrega: data.fechaEntrega,
-        linkEjemplo: data.linkEjemplo || null,
+        ...(data.linksEjemplo !== undefined ? { linksEjemplo: data.linksEjemplo } : {}),
         copy: data.copy || null,
         guion: data.guion || null,
         statusId: data.statusId,
@@ -163,6 +163,52 @@ export async function deleteDeliverables(input: z.infer<typeof deleteManySchema>
   await prisma.deliverable.deleteMany({ where: { id: { in: deliverableIds }, agencyId } });
 
   revalidatePath("/[agencySlug]/entregables", "page");
+}
+
+/**
+ * Duplica un entregable dentro del mismo mes y estatus, al final de esa
+ * columna. Copia título (con sufijo "(copia)"), notas, links de ejemplo,
+ * copy y guion — pero NUNCA las imágenes: `archivoUrl`/`imagenEjemploUrl`
+ * apuntan a un archivo en R2 ligado al id del entregable original, y
+ * copiar la URL haría que ambos registros compartan el mismo archivo (si
+ * luego alguien reemplaza/borra la imagen en uno, se le borra al otro por
+ * debajo). Tampoco copia el estatus de pago del extra ni su transacción
+ * — el duplicado es un entregable nuevo, no una segunda cobranza del mismo.
+ */
+export async function duplicateDeliverable(deliverableId: string) {
+  const { agencyId } = await getTenantSession();
+
+  const existing = await prisma.deliverable.findFirst({ where: { id: deliverableId, agencyId } });
+  if (!existing) throw new Error("Entregable no encontrado en esta agencia");
+
+  const maxOrden = await prisma.deliverable.aggregate({
+    where: { agencyId, statusId: existing.statusId, anio: existing.anio, mes: existing.mes },
+    _max: { orden: true },
+  });
+
+  const created = await prisma.deliverable.create({
+    data: {
+      agencyId,
+      clientId: existing.clientId,
+      tipo: existing.tipo,
+      titulo: `${existing.titulo} (copia)`,
+      descripcion: existing.descripcion,
+      statusId: existing.statusId,
+      fechaEntrega: existing.fechaEntrega,
+      linksEjemplo: existing.linksEjemplo,
+      copy: existing.copy,
+      guion: existing.guion,
+      anio: existing.anio,
+      mes: existing.mes,
+      esExtra: existing.esExtra,
+      montoExtra: existing.montoExtra,
+      estatusPagoExtra: existing.esExtra ? "PENDIENTE" : undefined,
+      orden: (maxOrden._max.orden ?? -1) + 1,
+    },
+  });
+
+  revalidatePath("/[agencySlug]/entregables", "page");
+  return { id: created.id };
 }
 
 const moveToMonthSchema = z.object({
@@ -278,7 +324,7 @@ export async function createDeliverable(input: z.infer<typeof createDeliverableS
         titulo: data.titulo,
         descripcion: data.descripcion,
         fechaEntrega: data.fechaEntrega,
-        linkEjemplo: data.linkEjemplo || undefined,
+        linksEjemplo: data.linkEjemplo ? [data.linkEjemplo] : undefined,
         anio: data.anio,
         mes: data.mes,
         esExtra: data.esExtra,
@@ -448,6 +494,56 @@ export async function removeDeliverableImage(deliverableId: string) {
   await prisma.deliverable.update({
     where: { id: deliverableId },
     data: { archivoUrl: null, archivoKey: null },
+  });
+
+  revalidatePath("/[agencySlug]/entregables", "page");
+}
+
+/**
+ * Sube (o reemplaza) la imagen de EJEMPLO/referencia de un entregable —
+ * distinta de `uploadDeliverableImage` (esa es la imagen del entregable ya
+ * hecho). Esta es la inspiración/referencia para producirlo, se muestra
+ * junto a los links de ejemplo en el PDF de Parrilla.
+ */
+export async function uploadDeliverableExampleImage(deliverableId: string, formData: FormData) {
+  const { agencyId } = await getTenantSession();
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) throw new Error("Selecciona una imagen válida");
+  if (file.size > MAX_IMAGE_SIZE_BYTES) throw new Error("La imagen no debe pesar más de 5MB");
+  if (!file.type.startsWith("image/")) throw new Error("El archivo debe ser una imagen");
+
+  const existing = await prisma.deliverable.findFirst({ where: { id: deliverableId, agencyId } });
+  if (!existing) throw new Error("Entregable no encontrado en esta agencia");
+
+  const { key, url } = await uploadToR2(existing.clientId, deliverableId, file);
+
+  if (existing.imagenEjemploKey) {
+    await deleteR2Object(existing.imagenEjemploKey).catch(() => {});
+  }
+
+  await prisma.deliverable.update({
+    where: { id: deliverableId },
+    data: { imagenEjemploUrl: url, imagenEjemploKey: key },
+  });
+
+  revalidatePath("/[agencySlug]/entregables", "page");
+  return { url };
+}
+
+export async function removeDeliverableExampleImage(deliverableId: string) {
+  const { agencyId } = await getTenantSession();
+
+  const existing = await prisma.deliverable.findFirst({ where: { id: deliverableId, agencyId } });
+  if (!existing) throw new Error("Entregable no encontrado en esta agencia");
+
+  if (existing.imagenEjemploKey) {
+    await deleteR2Object(existing.imagenEjemploKey).catch(() => {});
+  }
+
+  await prisma.deliverable.update({
+    where: { id: deliverableId },
+    data: { imagenEjemploUrl: null, imagenEjemploKey: null },
   });
 
   revalidatePath("/[agencySlug]/entregables", "page");

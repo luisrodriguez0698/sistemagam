@@ -13,10 +13,12 @@ interface RouteParams {
 
 /**
  * Genera y descarga la "parrilla de contenido" de planeación de un cliente:
- * solo título, descripción y fecha de entrega — sin imágenes ni copy, para
- * organizar el mes ANTES de empezar a producir. Distinto del "resumen"
- * (route.ts en /resumen), que sí lleva miniaturas y es para después de
- * entregar el contenido.
+ * título, descripción, fecha de entrega, links e imagen de ejemplo — sin
+ * copy ni guion (uso interno del equipo) — para organizar el mes ANTES de
+ * empezar a producir. La imagen aquí es de EJEMPLO/inspiración, no la del
+ * entregable ya hecho. Distinto del "resumen" (route.ts en /resumen), que
+ * lleva la miniatura del entregable ya entregado y es para después de
+ * producir el contenido.
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   const { clientId } = await params;
@@ -45,7 +47,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       fechaEntrega: d.fechaEntrega
         ? formatDateOnly(d.fechaEntrega, { day: "2-digit", month: "2-digit", year: "numeric" })
         : null,
-      link: d.linkEjemplo,
+      links: d.linksEjemplo,
+      imagenEjemploUrl: d.imagenEjemploUrl,
     };
   }
 
